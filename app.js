@@ -212,9 +212,9 @@ async function loadAvailableSessions() {
 
   document.getElementById('no-session-msg').style.display = 'none';
 
-  // If only one open session, go directly to it
+  // If exactly one open session, go directly to it
   const openSessions = allSessions.filter(s => s.status === 'open');
-  if (openSessions.length === 1 && allSessions.length === 1) {
+  if (openSessions.length === 1) {
     await selectSession(openSessions[0]);
     return;
   }
@@ -341,6 +341,8 @@ async function selectSession(session) {
       params: { restaurant_id: `eq.${drinkRest.id}`, order: 'sort_order' }
     });
     document.getElementById('drink-section').style.display = '';
+    const drinkHint = document.getElementById('drink-no-menu-hint');
+    if (drinkHint) drinkHint.style.display = state.drinkMenuItems.length === 0 ? '' : 'none';
   } else {
     state.drinkMenuItems = [];
     state.drinkToppings = [];
@@ -358,20 +360,29 @@ document.getElementById('back-to-sessions').addEventListener('click', () => {
 function loadTodaySession() { return loadAvailableSessions(); }
 
 async function checkExistingOrder() {
-  if (!state.currentSession || !state.currentUser) return;
+  if (!state.currentSession || !state.currentUser) {
+    showOrderForm();
+    return;
+  }
 
-  const orders = await api('orders', {
-    params: {
-      select: '*,order_items(*)',
-      session_id: `eq.${state.currentSession.id}`,
-      employee_id: `eq.${state.currentUser.id}`,
+  try {
+    const orders = await api('orders', {
+      params: {
+        select: '*,order_items(*)',
+        session_id: `eq.${state.currentSession.id}`,
+        employee_id: `eq.${state.currentUser.id}`,
+      }
+    });
+
+    if (orders && orders.length > 0) {
+      state.existingOrder = orders[0];
+      showExistingOrder();
+    } else {
+      state.existingOrder = null;
+      showOrderForm();
     }
-  });
-
-  if (orders && orders.length > 0) {
-    state.existingOrder = orders[0];
-    showExistingOrder();
-  } else {
+  } catch (err) {
+    console.error('checkExistingOrder error:', err);
     state.existingOrder = null;
     showOrderForm();
   }
@@ -1043,10 +1054,15 @@ document.getElementById('next-month').addEventListener('click', () => {
 
 // ---- Admin View ----
 async function loadAdmin() {
-  await loadRestaurants();
-  renderAdminRestaurants();
-  renderAdminEmployees();
-  await loadAdminSession();
+  try {
+    await loadRestaurants();
+    renderAdminRestaurants();
+    renderAdminEmployees();
+    await loadAdminSession();
+  } catch (err) {
+    console.error('loadAdmin error:', err);
+    toast('管理頁載入失敗：' + err.message);
+  }
 }
 
 async function loadRestaurants() {
@@ -1072,7 +1088,7 @@ function renderAdminRestaurants() {
 
   el.querySelectorAll('[data-action="edit-rest"]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const r = state.restaurants.find(x => x.id === btn.dataset.id);
+      const r = state.restaurants.find(x => String(x.id) === String(btn.dataset.id));
       if (!r) return;
       document.getElementById('rest-name').value = r.name;
       document.getElementById('rest-type').value = r.type;
@@ -1084,7 +1100,14 @@ function renderAdminRestaurants() {
     });
   });
   el.querySelectorAll('[data-action="edit-menu"]').forEach(btn => {
-    btn.addEventListener('click', () => openMenuManagement(btn.dataset.id));
+    btn.addEventListener('click', async () => {
+      try {
+        await openMenuManagement(btn.dataset.id);
+      } catch (err) {
+        console.error('openMenuManagement error:', err);
+        toast('開啟菜單失敗：' + err.message);
+      }
+    });
   });
   el.querySelectorAll('[data-action="delete-rest"]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1208,7 +1231,11 @@ let mgmtRestaurantId = null;
 
 async function openMenuManagement(restaurantId) {
   mgmtRestaurantId = restaurantId;
-  const rest = state.restaurants.find(r => r.id === restaurantId);
+  const rest = state.restaurants.find(r => String(r.id) === String(restaurantId));
+  if (!rest) {
+    toast('找不到餐廳資料，請重新整理頁面');
+    return;
+  }
   document.getElementById('mgmt-restaurant-name').textContent = rest.name;
   document.getElementById('menu-management').style.display = '';
 
