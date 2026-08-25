@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>午餐點餐系統</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 身份選擇遮罩 -->
+  <div id="identity-modal" class="modal">
+    <div class="modal-content">
+      <h2>選擇你的名字</h2>
+      <div id="employee-list" class="employee-grid"></div>
+    </div>
+  </div>
+
+  <!-- 頂部列 -->
+  <header>
+    <div class="header-left">
+      <h1>🍱 午餐點餐</h1>
+    </div>
+    <div class="header-right">
+      <span id="current-user" class="user-badge"></span>
+      <button id="switch-user-btn" class="btn-icon" title="切換使用者">👤</button>
+    </div>
+  </header>
+
+  <!-- 導航列 -->
+  <nav>
+    <button class="nav-btn active" data-view="order">點餐</button>
+    <button class="nav-btn" data-view="summary">彙整</button>
+    <button class="nav-btn" data-view="history">紀錄</button>
+    <button class="nav-btn" data-view="admin">管理</button>
+  </nav>
+
+  <main>
+    <!-- ========== 點餐頁 ========== -->
+    <section id="view-order" class="view active">
+      <div id="no-session-msg" class="empty-state">
+        <p>今天還沒有開團喔！</p>
+        <p class="hint">請管理員到「管理」頁面開啟今日點餐</p>
+      </div>
+
+      <div id="session-info" class="card" style="display:none">
+        <div class="session-header">
+          <div>
+            <span class="label">今日餐廳</span>
+            <h3 id="session-meal-name"></h3>
+          </div>
+          <div>
+            <span class="label">飲料店</span>
+            <h3 id="session-drink-name">—</h3>
+          </div>
+          <div id="session-deadline-wrap">
+            <span class="label">截止時間</span>
+            <span id="session-deadline" class="deadline"></span>
+          </div>
+        </div>
+        <div id="session-notes" class="session-notes" style="display:none"></div>
+        <div id="session-status-bar" style="display:none">
+          <span class="status-closed">已截止</span>
+        </div>
+      </div>
+
+      <!-- 已提交提示 -->
+      <div id="already-ordered" class="card success-card" style="display:none">
+        <h3>✓ 你已經點過了</h3>
+        <div id="my-order-preview"></div>
+        <button id="edit-order-btn" class="btn btn-secondary">修改訂單</button>
+      </div>
+
+      <!-- 點餐表單 -->
+      <div id="order-form" style="display:none">
+        <!-- 正餐區 -->
+        <div class="card" id="meal-section">
+          <h3 class="section-title">🍚 正餐</h3>
+          <div class="search-box">
+            <input type="text" id="meal-search" placeholder="輸入餐點名稱搜尋..." autocomplete="off">
+            <div id="meal-results" class="search-results"></div>
+          </div>
+          <div id="selected-meals" class="selected-items"></div>
+        </div>
+
+        <!-- 飲料區 -->
+        <div class="card" id="drink-section" style="display:none">
+          <h3 class="section-title">🧋 飲料</h3>
+          <div class="search-box">
+            <input type="text" id="drink-search" placeholder="輸入飲料名稱搜尋..." autocomplete="off">
+            <div id="drink-results" class="search-results"></div>
+          </div>
+          <div id="selected-drinks" class="selected-items"></div>
+        </div>
+
+        <!-- 加點區 -->
+        <div class="card" id="extra-section">
+          <h3 class="section-title">➕ 加點（最多 3 項）</h3>
+          <div class="search-box">
+            <input type="text" id="extra-search" placeholder="搜尋加點品項..." autocomplete="off">
+            <div id="extra-results" class="search-results"></div>
+          </div>
+          <div id="selected-extras" class="selected-items"></div>
+        </div>
+
+        <!-- 訂單摘要 -->
+        <div class="card" id="order-summary-card">
+          <h3 class="section-title">📋 訂單摘要</h3>
+          <div id="order-summary-list"></div>
+          <div class="order-total">
+            <span>合計</span>
+            <span id="order-total-amount">$0</span>
+          </div>
+          <button id="submit-order-btn" class="btn btn-primary btn-block">送出訂單</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 彙整頁 ========== -->
+    <section id="view-summary" class="view">
+      <div class="card">
+        <div class="summary-header">
+          <h3>📋 當日訂單彙整</h3>
+          <button id="copy-summary-btn" class="btn btn-secondary">複製文字</button>
+        </div>
+        <div id="summary-date" class="summary-date"></div>
+        <div id="summary-content" class="summary-content">
+          <p class="empty-state">今天還沒有訂單</p>
+        </div>
+        <div id="summary-stats" class="summary-stats"></div>
+      </div>
+
+      <div class="card">
+        <h3>👥 個人訂單明細</h3>
+        <div id="summary-detail"></div>
+      </div>
+    </section>
+
+    <!-- ========== 紀錄頁 ========== -->
+    <section id="view-history" class="view">
+      <div class="card">
+        <div class="history-header">
+          <h3>📜 我的紀錄</h3>
+          <div class="month-picker">
+            <button id="prev-month" class="btn-icon">&lt;</button>
+            <span id="history-month"></span>
+            <button id="next-month" class="btn-icon">&gt;</button>
+          </div>
+        </div>
+        <div id="history-summary" class="history-summary"></div>
+        <div id="history-list"></div>
+      </div>
+
+      <div class="card">
+        <h3>💰 餘額資訊</h3>
+        <div id="balance-info"></div>
+      </div>
+    </section>
+
+    <!-- ========== 管理頁 ========== -->
+    <section id="view-admin" class="view">
+      <!-- 開團 -->
+      <div class="card">
+        <h3>🔔 開團點餐</h3>
+        <div class="form-group">
+          <label>正餐餐廳</label>
+          <select id="admin-meal-restaurant"></select>
+        </div>
+        <div class="form-group">
+          <label>飲料店（可不選）</label>
+          <select id="admin-drink-restaurant">
+            <option value="">— 不訂飲料 —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>截止時間</label>
+          <input type="time" id="admin-deadline" value="10:30">
+        </div>
+        <div class="form-group">
+          <label>備註</label>
+          <input type="text" id="admin-notes" placeholder="例：今日滿500免運">
+        </div>
+        <button id="open-session-btn" class="btn btn-primary btn-block">開團</button>
+        <button id="close-session-btn" class="btn btn-danger btn-block" style="display:none">截止點餐</button>
+      </div>
+
+      <!-- 餐廳管理 -->
+      <div class="card">
+        <h3>🏪 餐廳管理</h3>
+        <div id="restaurant-list" class="admin-list"></div>
+        <button id="add-restaurant-btn" class="btn btn-secondary btn-block">＋ 新增餐廳</button>
+      </div>
+
+      <!-- 菜單管理 -->
+      <div class="card" id="menu-management" style="display:none">
+        <div class="menu-mgmt-header">
+          <h3>📝 菜單管理：<span id="mgmt-restaurant-name"></span></h3>
+          <button id="close-menu-mgmt" class="btn-icon">✕</button>
+        </div>
+
+        <div class="form-group">
+          <label>分類</label>
+          <select id="mgmt-category">
+            <option value="">選擇分類</option>
+          </select>
+          <button id="add-category-btn" class="btn btn-small">＋分類</button>
+        </div>
+
+        <div id="menu-item-list" class="admin-list"></div>
+
+        <div class="add-item-form">
+          <h4>新增品項</h4>
+          <div class="form-row">
+            <input type="text" id="new-item-name" placeholder="品名">
+            <input type="number" id="new-item-price" placeholder="價格" style="width:80px">
+          </div>
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="new-item-has-sizes"> 有尺寸選項
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="new-item-sweetness"> 可調甜度
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="new-item-ice"> 可調冰塊
+            </label>
+          </div>
+          <div id="sizes-input" style="display:none">
+            <div id="sizes-list"></div>
+            <button id="add-size-btn" class="btn btn-small">＋尺寸</button>
+          </div>
+          <button id="add-item-btn" class="btn btn-primary">新增品項</button>
+        </div>
+      </div>
+
+      <!-- 員工管理 -->
+      <div class="card">
+        <h3>👥 員工管理</h3>
+        <div id="admin-employee-list" class="admin-list"></div>
+        <div class="form-row">
+          <input type="text" id="new-employee-name" placeholder="新增員工姓名">
+          <input type="number" id="new-employee-balance" placeholder="餘額" style="width:100px">
+          <button id="add-employee-btn" class="btn btn-primary">新增</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 飲料客製化彈窗 -->
+  <div id="drink-customize-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <h3 id="customize-drink-name"></h3>
+      <div id="customize-size-section" style="display:none">
+        <label>尺寸</label>
+        <div id="customize-sizes" class="option-group"></div>
+      </div>
+      <div id="customize-sweetness-section" style="display:none">
+        <label>甜度</label>
+        <div id="customize-sweetness" class="option-group"></div>
+      </div>
+      <div id="customize-ice-section" style="display:none">
+        <label>冰塊</label>
+        <div id="customize-ice" class="option-group"></div>
+      </div>
+      <div id="customize-toppings-section" style="display:none">
+        <label>加料</label>
+        <div id="customize-toppings" class="option-group"></div>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <input type="text" id="customize-notes" placeholder="例：不要太甜">
+      </div>
+      <div class="customize-price">
+        小計：<span id="customize-total">$0</span>
+      </div>
+      <div class="modal-actions">
+        <button id="customize-cancel" class="btn btn-secondary">取消</button>
+        <button id="customize-confirm" class="btn btn-primary">確認加入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 尺寸選擇彈窗（正餐用） -->
+  <div id="size-modal" class="modal" style="display:none">
+    <div class="modal-content modal-small">
+      <h3 id="size-modal-name"></h3>
+      <div id="size-options" class="option-group"></div>
+      <div class="form-group">
+        <label>備註</label>
+        <input type="text" id="size-modal-notes" placeholder="例：不要香菜">
+      </div>
+      <div class="modal-actions">
+        <button id="size-cancel" class="btn btn-secondary">取消</button>
+        <button id="size-confirm" class="btn btn-primary">確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增餐廳彈窗 -->
+  <div id="restaurant-modal" class="modal" style="display:none">
+    <div class="modal-content modal-small">
+      <h3>新增餐廳</h3>
+      <div class="form-group">
+        <label>餐廳名稱</label>
+        <input type="text" id="rest-name" placeholder="例：好吃便當">
+      </div>
+      <div class="form-group">
+        <label>類型</label>
+        <select id="rest-type">
+          <option value="meal">正餐</option>
+          <option value="drink">飲料</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>電話</label>
+        <input type="text" id="rest-phone" placeholder="選填">
+      </div>
+      <div class="form-group">
+        <label>地址</label>
+        <input type="text" id="rest-address" placeholder="選填">
+      </div>
+      <div class="modal-actions">
+        <button id="rest-cancel" class="btn btn-secondary">取消</button>
+        <button id="rest-save" class="btn btn-primary">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
