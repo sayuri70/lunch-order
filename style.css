@@ -729,6 +729,29 @@ main { max-width: 600px; margin: 0 auto; padding: 12px; }
 .wallet-tx-amount.minus { color: var(--danger); }
 .wallet-tx-info { color: var(--text-secondary); }
 
+/* Restaurant group collapse */
+.rest-group { margin-bottom: 4px; }
+.rest-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  user-select: none;
+}
+.rest-group-header:active { opacity: 0.7; }
+.rest-group-arrow {
+  transition: transform 0.2s;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.rest-group-arrow.open { transform: rotate(90deg); }
+.rest-group-body { padding: 0 4px; }
+
 @media (max-width: 380px) {
   .employee-grid { grid-template-columns: repeat(2, 1fr); }
   .session-header { grid-template-columns: 1fr 1fr; }

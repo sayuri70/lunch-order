@@ -1065,18 +1065,47 @@ async function loadRestaurants() {
 
 function renderAdminRestaurants() {
   const el = document.getElementById('restaurant-list');
-  el.innerHTML = state.restaurants.map(r => {
-    const typeLabel = r.type === 'meal' ? '🍱' : '🧋';
-    const hasPhoto = r.menu_image_url ? '📷' : '';
-    return `<div class="admin-list-item">
-      <span>${typeLabel} ${r.name} ${hasPhoto}</span>
-      <div class="item-actions">
-        <button class="btn btn-small" data-action="edit-rest" data-id="${r.id}">編輯</button>
-        <button class="btn btn-small" data-action="edit-menu" data-id="${r.id}">菜單</button>
-        <button class="btn btn-small btn-danger" data-action="delete-rest" data-id="${r.id}" style="font-size:12px">刪除</button>
+  const meals = state.restaurants.filter(r => r.type === 'meal');
+  const drinks = state.restaurants.filter(r => r.type === 'drink');
+
+  function renderGroup(title, emoji, items, collapsed) {
+    const id = title.replace(/\s/g, '');
+    return `<div class="rest-group">
+      <div class="rest-group-header" data-toggle="${id}">
+        <span>${emoji} ${title}（${items.length}）</span>
+        <span class="rest-group-arrow ${collapsed ? '' : 'open'}">▸</span>
+      </div>
+      <div class="rest-group-body" id="rest-group-${id}" style="${collapsed ? 'display:none' : ''}">
+        ${items.map(r => {
+          const hasPhoto = r.menu_image_url ? '📷' : '';
+          return `<div class="admin-list-item">
+            <span>${r.name} ${hasPhoto}</span>
+            <div class="item-actions">
+              <button class="btn btn-small" data-action="edit-rest" data-id="${r.id}">編輯</button>
+              <button class="btn btn-small" data-action="edit-menu" data-id="${r.id}">菜單</button>
+              <button class="btn btn-small btn-danger" data-action="delete-rest" data-id="${r.id}" style="font-size:12px">刪除</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
-  }).join('');
+  }
+
+  el.innerHTML = renderGroup('正餐', '🍱', meals, false) + renderGroup('飲料', '🧋', drinks, false);
+
+  el.querySelectorAll('.rest-group-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const target = document.getElementById('rest-group-' + header.dataset.toggle);
+      const arrow = header.querySelector('.rest-group-arrow');
+      if (target.style.display === 'none') {
+        target.style.display = '';
+        arrow.classList.add('open');
+      } else {
+        target.style.display = 'none';
+        arrow.classList.remove('open');
+      }
+    });
+  });
 
   el.querySelectorAll('[data-action="edit-rest"]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1113,13 +1142,13 @@ function renderAdminRestaurants() {
   // Populate session dropdowns
   const mealSelect = document.getElementById('admin-meal-restaurant');
   const drinkSelect = document.getElementById('admin-drink-restaurant');
-  const meals = state.restaurants.filter(r => r.type === 'meal' && r.is_active);
-  const drinks = state.restaurants.filter(r => r.type === 'drink' && r.is_active);
+  const activeMeals = state.restaurants.filter(r => r.type === 'meal' && r.is_active);
+  const activeDrinks = state.restaurants.filter(r => r.type === 'drink' && r.is_active);
 
   mealSelect.innerHTML = '<option value="">— 不訂正餐 —</option>' +
-    meals.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    activeMeals.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
   drinkSelect.innerHTML = '<option value="">— 不訂飲料 —</option>' +
-    drinks.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    activeDrinks.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
 }
 
 function renderAdminEmployees() {
