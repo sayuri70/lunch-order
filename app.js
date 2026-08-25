@@ -1293,32 +1293,116 @@ async function loadMenuItems() {
   }
   el.innerHTML = items.map(item => {
     const sizes = parseSizes(item.sizes);
+    const hasSizes = sizes.length > 0;
     let priceStr;
-    if (sizes.length > 0) {
+    if (hasSizes) {
       priceStr = sizes.map(s => `${s.name}$${s.price}`).join(' / ');
     } else {
       priceStr = `$${item.price || 0}`;
     }
     const cat = item.menu_categories ? item.menu_categories.name : '';
-    return `<div class="admin-list-item" style="flex-wrap:wrap">
-      <div style="flex:1;min-width:0">
-        <div>${escapeHtml(item.name)} <span style="color:var(--primary)">${priceStr}</span></div>
-        <div style="font-size:11px;color:var(--text-secondary)">${escapeHtml(cat)}</div>
+
+    // 編輯表單（預設隱藏）
+    let editForm;
+    if (hasSizes) {
+      const sizeInputs = sizes.map((s, i) =>
+        `<div class="form-row" style="margin-bottom:4px">
+          <input type="text" class="edit-size-name" value="${escapeHtml(s.name)}" style="width:50px" placeholder="尺寸">
+          <input type="number" class="edit-size-price" value="${s.price}" style="width:70px" placeholder="價格">
+        </div>`
+      ).join('');
+      editForm = `<div class="edit-item-form" data-id="${item.id}" style="display:none;width:100%;padding:8px 0">
+        <div class="form-row" style="margin-bottom:6px">
+          <input type="text" class="edit-name" value="${escapeHtml(item.name)}" placeholder="品名" style="flex:1">
+        </div>
+        <div class="edit-sizes-wrap">${sizeInputs}</div>
+        <div class="form-row" style="margin-top:6px;gap:6px">
+          <button class="btn btn-small btn-primary edit-save">儲存</button>
+          <button class="btn btn-small edit-cancel">取消</button>
+        </div>
+      </div>`;
+    } else {
+      editForm = `<div class="edit-item-form" data-id="${item.id}" style="display:none;width:100%;padding:8px 0">
+        <div class="form-row" style="margin-bottom:6px">
+          <input type="text" class="edit-name" value="${escapeHtml(item.name)}" placeholder="品名" style="flex:1">
+          <input type="number" class="edit-price" value="${item.price || 0}" placeholder="價格" style="width:80px">
+        </div>
+        <div class="form-row" style="gap:6px">
+          <button class="btn btn-small btn-primary edit-save">儲存</button>
+          <button class="btn btn-small edit-cancel">取消</button>
+        </div>
+      </div>`;
+    }
+
+    return `<div class="admin-list-item" style="flex-wrap:wrap" data-item-row="${item.id}">
+      <div class="item-display" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div>${escapeHtml(item.name)} <span style="color:var(--primary)">${priceStr}</span></div>
+          <div style="font-size:11px;color:var(--text-secondary)">${escapeHtml(cat)}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn btn-small" data-action="edit-item" data-id="${item.id}">編輯</button>
+          <button class="btn btn-small btn-danger" data-action="delete-item" data-id="${item.id}" style="font-size:12px">刪除</button>
+        </div>
       </div>
-      <div class="item-actions">
-        <button class="btn btn-small" data-action="edit-item" data-id="${item.id}">編輯</button>
-        <button class="btn btn-small btn-danger" data-action="delete-item" data-id="${item.id}" style="font-size:12px">刪除</button>
-      </div>
+      ${editForm}
     </div>`;
   }).join('');
 
+  // 編輯：展開表單
   el.querySelectorAll('[data-action="edit-item"]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const item = items.find(i => String(i.id) === String(btn.dataset.id));
-      if (!item) return;
-      editMenuItem(item);
+      const row = btn.closest('[data-item-row]');
+      row.querySelector('.item-display').style.display = 'none';
+      row.querySelector('.edit-item-form').style.display = '';
+      row.querySelector('.edit-name').focus();
     });
   });
+
+  // 取消
+  el.querySelectorAll('.edit-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('[data-item-row]');
+      row.querySelector('.item-display').style.display = '';
+      row.querySelector('.edit-item-form').style.display = 'none';
+    });
+  });
+
+  // 儲存
+  el.querySelectorAll('.edit-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const form = btn.closest('.edit-item-form');
+      const id = form.dataset.id;
+      const name = form.querySelector('.edit-name').value.trim();
+      if (!name) return toast('品名不可為空');
+
+      const priceInput = form.querySelector('.edit-price');
+      const sizeNames = form.querySelectorAll('.edit-size-name');
+      let body = { name };
+
+      if (sizeNames.length > 0) {
+        const newSizes = [];
+        const sizePrices = form.querySelectorAll('.edit-size-price');
+        sizeNames.forEach((el, i) => {
+          const sn = el.value.trim();
+          const sp = parseInt(sizePrices[i].value);
+          if (sn && !isNaN(sp)) newSizes.push({ name: sn, price: sp });
+        });
+        if (newSizes.length === 0) return toast('至少要有一個尺寸');
+        body.sizes = newSizes;
+      } else if (priceInput) {
+        const p = parseInt(priceInput.value);
+        if (isNaN(p)) return toast('請輸入價格');
+        body.price = p;
+      }
+
+      await api(`menu_items?id=eq.${id}`, { method: 'PATCH', body });
+      toast('已更新');
+      loadMenuItems();
+    });
+  });
+
+  // 刪除
   el.querySelectorAll('[data-action="delete-item"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(`確定刪除「${items.find(i => i.id === btn.dataset.id)?.name || ''}」？`)) return;
@@ -1327,37 +1411,6 @@ async function loadMenuItems() {
       toast('已刪除');
     });
   });
-}
-
-function editMenuItem(item) {
-  const sizes = parseSizes(item.sizes);
-  const hasSizes = sizes.length > 0;
-  const newName = prompt('品名：', item.name);
-  if (newName === null) return;
-  if (!newName.trim()) return toast('品名不可為空');
-
-  if (hasSizes) {
-    const sizesStr = sizes.map(s => `${s.name}:${s.price}`).join(', ');
-    const newSizesStr = prompt('尺寸與價格（格式：大:60, 中:50, 小:40）：', sizesStr);
-    if (newSizesStr === null) return;
-    const newSizes = newSizesStr.split(',').map(s => {
-      const [name, price] = s.trim().split(':');
-      return name && price ? { name: name.trim(), price: parseInt(price) } : null;
-    }).filter(s => s && !isNaN(s.price));
-    if (newSizes.length === 0) return toast('至少要有一個尺寸');
-    api(`menu_items?id=eq.${item.id}`, {
-      method: 'PATCH',
-      body: { name: newName.trim(), sizes: newSizes }
-    }).then(() => { toast('已更新'); loadMenuItems(); });
-  } else {
-    const newPrice = prompt('價格：', item.price || 0);
-    if (newPrice === null) return;
-    if (isNaN(parseInt(newPrice))) return toast('請輸入數字');
-    api(`menu_items?id=eq.${item.id}`, {
-      method: 'PATCH',
-      body: { name: newName.trim(), price: parseInt(newPrice) }
-    }).then(() => { toast('已更新'); loadMenuItems(); });
-  }
 }
 
 document.getElementById('mgmt-category').addEventListener('change', loadMenuItems);
