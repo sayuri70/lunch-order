@@ -1722,17 +1722,87 @@ document.getElementById('spin-meal-btn').addEventListener('click', () => spinWhe
 document.getElementById('spin-drink-btn').addEventListener('click', () => spinWheel('drink'));
 
 // ---- Menu Photo ----
+let photoZoom = 1;
+function setPhotoZoom(z) {
+  photoZoom = Math.max(0.5, Math.min(5, z));
+  const img = document.getElementById('menu-photo-img');
+  img.style.transform = `scale(${photoZoom})`;
+  img.style.width = photoZoom > 1 ? `${100}%` : '100%';
+}
+
 function showMenuPhoto(name, url) {
   document.getElementById('menu-photo-title').textContent = name + ' 菜單';
   document.getElementById('menu-photo-img').src = toDirectImageUrl(url);
   document.getElementById('menu-photo-modal').style.display = 'flex';
+  setPhotoZoom(1);
+  document.getElementById('photo-container').scrollTo(0, 0);
 }
 document.getElementById('close-menu-photo').addEventListener('click', () => {
   document.getElementById('menu-photo-modal').style.display = 'none';
 });
 document.getElementById('menu-photo-modal').addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  if (e.target === e.currentTarget) {
+    e.currentTarget.style.display = 'none';
+  }
 });
+
+// Zoom buttons
+document.getElementById('zoom-in-btn').addEventListener('click', () => setPhotoZoom(photoZoom + 0.5));
+document.getElementById('zoom-out-btn').addEventListener('click', () => setPhotoZoom(photoZoom - 0.5));
+document.getElementById('zoom-reset-btn').addEventListener('click', () => {
+  setPhotoZoom(1);
+  document.getElementById('photo-container').scrollTo(0, 0);
+});
+
+// Mouse wheel zoom (desktop)
+document.getElementById('photo-container').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  setPhotoZoom(photoZoom + (e.deltaY < 0 ? 0.3 : -0.3));
+}, { passive: false });
+
+// Double-tap/click to toggle zoom
+document.getElementById('menu-photo-img').addEventListener('dblclick', (e) => {
+  e.preventDefault();
+  if (photoZoom > 1.2) {
+    setPhotoZoom(1);
+    document.getElementById('photo-container').scrollTo(0, 0);
+  } else {
+    setPhotoZoom(2.5);
+    const container = document.getElementById('photo-container');
+    const rect = container.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    container.scrollTo(
+      x * container.scrollWidth - rect.width / 2,
+      y * container.scrollHeight - rect.height / 2
+    );
+  }
+});
+
+// Pinch-to-zoom (mobile)
+(function() {
+  const container = document.getElementById('photo-container');
+  let startDist = 0;
+  let startZoom = 1;
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      startDist = Math.sqrt(dx * dx + dy * dy);
+      startZoom = photoZoom;
+    }
+  }, { passive: false });
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      setPhotoZoom(startZoom * (dist / startDist));
+    }
+  }, { passive: false });
+})();
 
 // ---- Wallet ----
 async function loadWallet() {

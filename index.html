@@ -76,9 +76,16 @@
         <div class="modal-content modal-photo">
           <div class="modal-photo-header">
             <h3 id="menu-photo-title"></h3>
-            <button id="close-menu-photo" class="btn-icon">✕</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="zoom-in-btn" class="btn-icon" title="放大">＋</button>
+              <button id="zoom-out-btn" class="btn-icon" title="縮小">－</button>
+              <button id="zoom-reset-btn" class="btn-icon" title="重置" style="font-size:12px">1:1</button>
+              <button id="close-menu-photo" class="btn-icon">✕</button>
+            </div>
           </div>
-          <img id="menu-photo-img" src="" alt="菜單照片" class="menu-photo-full">
+          <div id="photo-container" class="photo-container">
+            <img id="menu-photo-img" src="" alt="菜單照片" class="menu-photo-full">
+          </div>
         </div>
       </div>
 
