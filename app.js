@@ -849,7 +849,7 @@ async function loadSummary() {
     return;
   }
 
-  // Aggregate items
+  // Aggregate items (include sweetness/ice/toppings in key)
   const agg = {};
   const aggAdditional = {};
   let grandTotal = 0;
@@ -857,12 +857,16 @@ async function loadSummary() {
     grandTotal += order.total_amount;
     const target = order.is_additional ? aggAdditional : agg;
     (order.order_items || []).forEach(item => {
-      const key = `${item.item_name}|${item.size_name || ''}|${item.item_type}`;
+      const toppingNames = (item.toppings || []).map(t => t.name).sort().join('+');
+      const key = `${item.item_name}|${item.size_name || ''}|${item.item_type}|${item.sweetness || ''}|${item.ice || ''}|${toppingNames}`;
       if (!target[key]) {
         target[key] = {
           name: item.item_name,
           size: item.size_name,
           type: item.item_type,
+          sweetness: item.sweetness,
+          ice: item.ice,
+          toppings: item.toppings || [],
           count: 0,
           price: item.base_price,
           notesList: [],
@@ -893,6 +897,9 @@ async function loadSummary() {
       items.forEach(item => {
         let line = `・${item.name}`;
         if (item.size) line += `（${item.size}）`;
+        if (item.sweetness) line += ` ${item.sweetness}`;
+        if (item.ice) line += ` ${item.ice}`;
+        if (item.toppings && item.toppings.length) line += ` +${item.toppings.map(t => t.name).join('+')}`;
         line += ` ×${item.count}`;
         const uniqueNotes = [...new Set(item.notesList)].filter(Boolean);
         let notesStr = '';
