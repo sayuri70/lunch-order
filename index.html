@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>午餐點餐系統</title>
+  <title>吃飽喝足點餐系統</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
   <!-- 頂部列 -->
   <header>
     <div class="header-left">
-      <h1>🍱 午餐點餐</h1>
+      <h1>🍱 吃飽喝足</h1>
     </div>
     <div class="header-right">
       <span id="current-user" class="user-badge"></span>
@@ -31,6 +31,7 @@
     <button class="nav-btn active" data-view="order">點餐</button>
     <button class="nav-btn" data-view="summary">彙整</button>
     <button class="nav-btn" data-view="history">紀錄</button>
+    <button class="nav-btn" data-view="wallet">錢包</button>
     <button class="nav-btn" data-view="admin">管理</button>
   </nav>
 
@@ -38,14 +39,19 @@
     <!-- ========== 點餐頁 ========== -->
     <section id="view-order" class="view active">
       <div id="no-session-msg" class="empty-state">
-        <p>今天還沒有開團喔！</p>
-        <p class="hint">請管理員到「管理」頁面開啟今日點餐</p>
+        <p>目前沒有進行中的團喔！</p>
+        <p class="hint">請管理員到「管理」頁面開團</p>
+      </div>
+
+      <!-- 多團選擇列表 -->
+      <div id="session-list-wrap" style="display:none">
+        <div id="session-cards"></div>
       </div>
 
       <div id="session-info" class="card" style="display:none">
         <div class="session-header">
           <div>
-            <span class="label">今日餐廳</span>
+            <span class="label">餐廳</span>
             <h3 id="session-meal-name"></h3>
           </div>
           <div>
@@ -53,13 +59,26 @@
             <h3 id="session-drink-name">—</h3>
           </div>
           <div id="session-deadline-wrap">
-            <span class="label">截止時間</span>
+            <span class="label">截止</span>
             <span id="session-deadline" class="deadline"></span>
           </div>
         </div>
+        <div id="session-meta" class="session-meta"></div>
         <div id="session-notes" class="session-notes" style="display:none"></div>
         <div id="session-status-bar" style="display:none">
           <span class="status-closed">已截止</span>
+        </div>
+        <button id="back-to-sessions" class="btn btn-secondary btn-small" style="margin-top:8px">← 返回團列表</button>
+      </div>
+
+      <!-- 菜單照片彈窗 -->
+      <div id="menu-photo-modal" class="modal" style="display:none">
+        <div class="modal-content modal-photo">
+          <div class="modal-photo-header">
+            <h3 id="menu-photo-title"></h3>
+            <button id="close-menu-photo" class="btn-icon">✕</button>
+          </div>
+          <img id="menu-photo-img" src="" alt="菜單照片" class="menu-photo-full">
         </div>
       </div>
 
@@ -90,16 +109,6 @@
             <div id="drink-results" class="search-results"></div>
           </div>
           <div id="selected-drinks" class="selected-items"></div>
-        </div>
-
-        <!-- 加點區 -->
-        <div class="card" id="extra-section">
-          <h3 class="section-title">➕ 加點（最多 3 項）</h3>
-          <div class="search-box">
-            <input type="text" id="extra-search" placeholder="搜尋加點品項..." autocomplete="off">
-            <div id="extra-results" class="search-results"></div>
-          </div>
-          <div id="selected-extras" class="selected-items"></div>
         </div>
 
         <!-- 訂單摘要 -->
@@ -156,42 +165,95 @@
       </div>
     </section>
 
+    <!-- ========== 錢包頁 ========== -->
+    <section id="view-wallet" class="view">
+      <div class="card" id="topup-card">
+        <h3>💰 儲值</h3>
+        <div class="form-group">
+          <label>選擇員工</label>
+          <select id="topup-employee"></select>
+        </div>
+        <div class="form-row">
+          <input type="number" id="topup-amount" placeholder="金額（例：1000）">
+          <input type="date" id="topup-date">
+        </div>
+        <div class="form-group">
+          <label>備註</label>
+          <input type="text" id="topup-notes" placeholder="例：8月份餐費">
+        </div>
+        <button id="topup-btn" class="btn btn-primary btn-block">儲值</button>
+      </div>
+
+      <div class="card">
+        <h3>👥 全員餘額總覽</h3>
+        <div id="wallet-employee-list"></div>
+      </div>
+
+      <div class="card" id="wallet-history-card" style="display:none">
+        <h3>📜 <span id="wallet-history-name"></span> 的交易紀錄</h3>
+        <div id="wallet-history-list"></div>
+      </div>
+    </section>
+
     <!-- ========== 管理頁 ========== -->
     <section id="view-admin" class="view">
+      <!-- 轉轉樂 -->
+      <div class="card">
+        <h3>🎰 今天吃什麼？喝什麼？</h3>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="spin-meal-btn" class="btn btn-primary" style="flex:1">🍱 轉正餐</button>
+          <button id="spin-drink-btn" class="btn btn-secondary" style="flex:1">🧋 轉飲料</button>
+        </div>
+        <div id="spin-display" class="spin-display" style="display:none">
+          <div id="spin-text" class="spin-text"></div>
+        </div>
+      </div>
+
       <!-- 開團 -->
       <div class="card">
         <h3>🔔 開團點餐</h3>
         <div class="form-group">
-          <label>正餐餐廳</label>
+          <label>點餐日期</label>
+          <select id="admin-session-date"></select>
+        </div>
+        <div class="form-group">
+          <label>正餐餐廳（可不選）</label>
           <select id="admin-meal-restaurant"></select>
         </div>
-        <div class="form-group">
-          <label>飲料店（可不選）</label>
-          <select id="admin-drink-restaurant">
-            <option value="">— 不訂飲料 —</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>截止時間</label>
-          <input type="time" id="admin-deadline" value="10:30">
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label>飲料店（可不選）</label>
+            <select id="admin-drink-restaurant">
+              <option value="">— 不訂飲料 —</option>
+            </select>
+          </div>
+          <div class="form-group" style="width:110px;flex:none">
+            <label>截止時間</label>
+            <input type="time" id="admin-deadline" value="10:30">
+          </div>
         </div>
         <div class="form-group">
           <label>備註</label>
           <input type="text" id="admin-notes" placeholder="例：今日滿500免運">
         </div>
         <button id="open-session-btn" class="btn btn-primary btn-block">開團</button>
-        <button id="close-session-btn" class="btn btn-danger btn-block" style="display:none">截止點餐</button>
       </div>
 
-      <!-- 餐廳管理 -->
+      <!-- 進行中的團 -->
       <div class="card">
+        <h3>📋 目前所有團</h3>
+        <div id="admin-sessions-list"></div>
+      </div>
+
+      <!-- 餐廳管理（管理員限定） -->
+      <div class="card admin-only">
         <h3>🏪 餐廳管理</h3>
         <div id="restaurant-list" class="admin-list"></div>
         <button id="add-restaurant-btn" class="btn btn-secondary btn-block">＋ 新增餐廳</button>
       </div>
 
-      <!-- 菜單管理 -->
-      <div class="card" id="menu-management" style="display:none">
+      <!-- 菜單管理（管理員限定） -->
+      <div class="card admin-only" id="menu-management" style="display:none">
         <div class="menu-mgmt-header">
           <h3>📝 菜單管理：<span id="mgmt-restaurant-name"></span></h3>
           <button id="close-menu-mgmt" class="btn-icon">✕</button>
@@ -232,8 +294,8 @@
         </div>
       </div>
 
-      <!-- 員工管理 -->
-      <div class="card">
+      <!-- 員工管理（管理員限定） -->
+      <div class="card admin-only">
         <h3>👥 員工管理</h3>
         <div id="admin-employee-list" class="admin-list"></div>
         <div class="form-row">
@@ -317,6 +379,10 @@
       <div class="form-group">
         <label>地址</label>
         <input type="text" id="rest-address" placeholder="選填">
+      </div>
+      <div class="form-group">
+        <label>菜單照片網址</label>
+        <input type="url" id="rest-menu-image" placeholder="貼上圖片網址（選填）">
       </div>
       <div class="modal-actions">
         <button id="rest-cancel" class="btn btn-secondary">取消</button>
