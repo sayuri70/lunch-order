@@ -1403,6 +1403,7 @@ async function loadAdminSession() {
       <div class="item-actions">
         <span class="session-card-badge ${isOpen ? 'open' : s.is_settled ? 'settled' : 'closed'}">${isOpen ? '進行中' : s.is_settled ? '已結帳' : '已截止'}</span>
         ${actions}
+        ${isAdmin ? `<button class="btn btn-small btn-danger" data-action="delete-session" data-id="${s.id}" style="font-size:11px">刪除</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1480,6 +1481,27 @@ async function loadAdminSession() {
         loadAdminSession();
       } catch (err) {
         toast('結帳失敗：' + err.message);
+      }
+    });
+  });
+
+  el.querySelectorAll('[data-action="delete-session"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('確定要刪除這個團嗎？相關訂單也會一起刪除。')) return;
+      const sessionId = btn.dataset.id;
+      try {
+        const orders = await api('orders', { params: { session_id: `eq.${sessionId}`, select: 'id' } });
+        if (orders && orders.length > 0) {
+          const orderIds = orders.map(o => o.id).join(',');
+          await api(`order_items?order_id=in.(${orderIds})`, { method: 'DELETE' });
+          await api(`orders?session_id=eq.${sessionId}`, { method: 'DELETE' });
+        }
+        await api(`order_sessions?id=eq.${sessionId}`, { method: 'DELETE' });
+        toast('已刪除');
+        loadAdminSession();
+        loadAvailableSessions();
+      } catch (err) {
+        toast('刪除失敗：' + err.message);
       }
     });
   });
