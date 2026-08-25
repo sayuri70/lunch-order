@@ -600,8 +600,8 @@ function showDrinkCustomizeModal(item, callback) {
 
   const sizes = parseSizes(item.sizes);
   let selectedSize = sizes.length > 0 ? sizes[0] : null;
-  let selectedSweetness = item.has_sweetness ? '全糖' : null;
-  let selectedIce = item.has_ice ? '正常冰' : null;
+  let selectedSweetness = '全糖';
+  let selectedIce = '正常冰';
   let selectedToppings = [];
 
   // Sizes
@@ -623,41 +623,33 @@ function showDrinkCustomizeModal(item, callback) {
     sizeSection.style.display = 'none';
   }
 
-  // Sweetness
+  // Sweetness — always show for drinks
   const sweetSection = document.getElementById('customize-sweetness-section');
-  if (item.has_sweetness) {
-    sweetSection.style.display = '';
-    document.getElementById('customize-sweetness').innerHTML = SWEETNESS_OPTIONS.map((s, i) =>
-      `<button class="option-btn ${i === 0 ? 'selected' : ''}">${s}</button>`
-    ).join('');
-    document.getElementById('customize-sweetness').querySelectorAll('.option-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.getElementById('customize-sweetness').querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        selectedSweetness = btn.textContent;
-      });
+  sweetSection.style.display = '';
+  document.getElementById('customize-sweetness').innerHTML = SWEETNESS_OPTIONS.map((s, i) =>
+    `<button class="option-btn ${i === 0 ? 'selected' : ''}">${s}</button>`
+  ).join('');
+  document.getElementById('customize-sweetness').querySelectorAll('.option-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('customize-sweetness').querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedSweetness = btn.textContent;
     });
-  } else {
-    sweetSection.style.display = 'none';
-  }
+  });
 
-  // Ice
+  // Ice — always show for drinks
   const iceSection = document.getElementById('customize-ice-section');
-  if (item.has_ice) {
-    iceSection.style.display = '';
-    document.getElementById('customize-ice').innerHTML = ICE_OPTIONS.map((s, i) =>
-      `<button class="option-btn ${i === 0 ? 'selected' : ''}">${s}</button>`
-    ).join('');
-    document.getElementById('customize-ice').querySelectorAll('.option-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.getElementById('customize-ice').querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        selectedIce = btn.textContent;
-      });
+  iceSection.style.display = '';
+  document.getElementById('customize-ice').innerHTML = ICE_OPTIONS.map((s, i) =>
+    `<button class="option-btn ${i === 0 ? 'selected' : ''}">${s}</button>`
+  ).join('');
+  document.getElementById('customize-ice').querySelectorAll('.option-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('customize-ice').querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedIce = btn.textContent;
     });
-  } else {
-    iceSection.style.display = 'none';
-  }
+  });
 
   // Toppings
   const toppingSection = document.getElementById('customize-toppings-section');
@@ -1266,6 +1258,10 @@ async function loadMenuItems() {
 
   const items = await api('menu_items', { params });
   const el = document.getElementById('menu-item-list');
+  if (items.length === 0) {
+    el.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:12px">此分類暫無品項</p>';
+    return;
+  }
   el.innerHTML = items.map(item => {
     const sizes = parseSizes(item.sizes);
     let priceStr;
@@ -1275,25 +1271,64 @@ async function loadMenuItems() {
       priceStr = `$${item.price || 0}`;
     }
     const cat = item.menu_categories ? item.menu_categories.name : '';
-    const flags = [];
-    if (item.has_sweetness) flags.push('甜');
-    if (item.has_ice) flags.push('冰');
-    return `<div class="admin-list-item">
-      <div>
-        <div>${item.name} <span style="color:var(--primary)">${priceStr}</span></div>
-        <div style="font-size:11px;color:var(--text-secondary)">${cat}${flags.length ? ' | ' + flags.join('/') + '可調' : ''}</div>
+    return `<div class="admin-list-item" style="flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div>${escapeHtml(item.name)} <span style="color:var(--primary)">${priceStr}</span></div>
+        <div style="font-size:11px;color:var(--text-secondary)">${escapeHtml(cat)}</div>
       </div>
-      <button class="btn btn-small btn-danger" data-action="delete-item" data-id="${item.id}" style="font-size:12px">刪除</button>
+      <div class="item-actions">
+        <button class="btn btn-small" data-action="edit-item" data-id="${item.id}">編輯</button>
+        <button class="btn btn-small btn-danger" data-action="delete-item" data-id="${item.id}" style="font-size:12px">刪除</button>
+      </div>
     </div>`;
   }).join('');
 
+  el.querySelectorAll('[data-action="edit-item"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = items.find(i => String(i.id) === String(btn.dataset.id));
+      if (!item) return;
+      editMenuItem(item);
+    });
+  });
   el.querySelectorAll('[data-action="delete-item"]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (!confirm(`確定刪除「${items.find(i => i.id === btn.dataset.id)?.name || ''}」？`)) return;
       await api(`menu_items?id=eq.${btn.dataset.id}`, { method: 'DELETE' });
       loadMenuItems();
       toast('已刪除');
     });
   });
+}
+
+function editMenuItem(item) {
+  const sizes = parseSizes(item.sizes);
+  const hasSizes = sizes.length > 0;
+  const newName = prompt('品名：', item.name);
+  if (newName === null) return;
+  if (!newName.trim()) return toast('品名不可為空');
+
+  if (hasSizes) {
+    const sizesStr = sizes.map(s => `${s.name}:${s.price}`).join(', ');
+    const newSizesStr = prompt('尺寸與價格（格式：大:60, 中:50, 小:40）：', sizesStr);
+    if (newSizesStr === null) return;
+    const newSizes = newSizesStr.split(',').map(s => {
+      const [name, price] = s.trim().split(':');
+      return name && price ? { name: name.trim(), price: parseInt(price) } : null;
+    }).filter(s => s && !isNaN(s.price));
+    if (newSizes.length === 0) return toast('至少要有一個尺寸');
+    api(`menu_items?id=eq.${item.id}`, {
+      method: 'PATCH',
+      body: { name: newName.trim(), sizes: newSizes }
+    }).then(() => { toast('已更新'); loadMenuItems(); });
+  } else {
+    const newPrice = prompt('價格：', item.price || 0);
+    if (newPrice === null) return;
+    if (isNaN(parseInt(newPrice))) return toast('請輸入數字');
+    api(`menu_items?id=eq.${item.id}`, {
+      method: 'PATCH',
+      body: { name: newName.trim(), price: parseInt(newPrice) }
+    }).then(() => { toast('已更新'); loadMenuItems(); });
+  }
 }
 
 document.getElementById('mgmt-category').addEventListener('change', loadMenuItems);
