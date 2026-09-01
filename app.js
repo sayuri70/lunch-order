@@ -22,6 +22,7 @@ const state = {
   currentUser: null,
   employees: [],
   restaurants: [],
+  wallets: [],
   currentSession: null,
   mealMenuItems: [],
   drinkMenuItems: [],
@@ -31,6 +32,8 @@ const state = {
   existingOrder: null,
   historyYear: new Date().getFullYear(),
   historyMonth: new Date().getMonth() + 1,
+  currentWalletId: null,
+  adminEditOrder: null,
 };
 
 // ---- API helpers ----
@@ -92,6 +95,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.classList.add('active');
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(`view-${view}`).classList.add('active');
+    if (view !== 'order' && state.adminEditOrder) {
+      state.adminEditOrder = null;
+      document.getElementById('admin-edit-banner').style.display = 'none';
+    }
     if (view === 'summary') loadSummary();
     if (view === 'history') loadHistory();
     if (view === 'wallet') loadWallet();
@@ -185,16 +192,32 @@ async function loadAvailableSessions() {
   // Auto-close sessions past deadline
   const now = new Date();
   const nowTime = now.getHours() * 60 + now.getMinutes();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
   for (const s of allSessions) {
-    if (s.status === 'open' && s.deadline && s.date === today) {
-      const [h, m] = s.deadline.split(':').map(Number);
-      if (nowTime >= h * 60 + m) {
-        await api(`order_sessions?id=eq.${s.id}`, {
-          method: 'PATCH', body: { status: 'closed', was_closed: true }
-        });
-        s.status = 'closed';
-        s.was_closed = true;
+    if (s.status !== 'open' || !s.deadline) continue;
+    const [h, m] = s.deadline.split(':').map(Number);
+    const deadlineTime = h * 60 + m;
+    const isOvernightDeadline = deadlineTime < 360;
+    let shouldClose = false;
+    if (s.date === today) {
+      // 同天：凌晨截止且現在是中午後 → 跨午夜，不關閉
+      if (isOvernightDeadline && nowTime >= 720) {
+        shouldClose = false;
+      } else {
+        shouldClose = nowTime >= deadlineTime;
       }
+    } else if (s.date === yesterdayStr && isOvernightDeadline) {
+      // 昨天的團 + 凌晨截止 → 跨午夜場景，檢查今天凌晨是否已過截止
+      shouldClose = nowTime >= deadlineTime;
+    }
+    if (shouldClose) {
+      await api(`order_sessions?id=eq.${s.id}`, {
+        method: 'PATCH', body: { status: 'closed', was_closed: true }
+      });
+      s.status = 'closed';
+      s.was_closed = true;
     }
   }
 
@@ -401,6 +424,7 @@ function showExistingOrder() {
     if (item.ice) desc += ` ${item.ice}`;
     const toppings = item.toppings || [];
     if (toppings.length) desc += ` +${toppings.map(t => t.name).join('+')}`;
+    if (item.quantity > 1) desc += ` ×${item.quantity}`;
     if (item.notes) desc += ` 【${item.notes}】`;
     return `<div class="preview-item">・${desc}　$${item.total_price}</div>`;
   }).join('');
@@ -413,7 +437,9 @@ function showExistingOrder() {
 function showOrderForm() {
   document.getElementById('already-ordered').style.display = 'none';
   const isClosed = state.currentSession && state.currentSession.status !== 'open';
-  document.getElementById('order-form').style.display = isClosed ? 'none' : '';
+  const isAdminEdit = !!state.adminEditOrder;
+  document.getElementById('order-form').style.display = (isClosed && !isAdminEdit) ? 'none' : '';
+  document.getElementById('submit-order-btn').textContent = isAdminEdit ? '確認改單' : '送出訂單';
   state.selectedMeals = [];
   state.selectedDrinks = [];
   renderSelectedItems();
@@ -518,22 +544,24 @@ setupSearch('drink-search', 'drink-results', () => state.drinkMenuItems, onSelec
 function onSelectMeal(item) {
   const sizes = parseSizes(item.sizes);
   if (sizes.length > 0) {
-    showSizeModal(item, sizes, (selectedSize, notes) => {
+    showSizeModal(item, sizes, (selectedSize, notes, qty) => {
       state.selectedMeals.push({
         menuItem: item,
         sizeName: selectedSize.name,
         price: selectedSize.price,
+        quantity: qty,
         notes: notes,
         type: 'meal',
       });
       renderSelectedItems();
     });
   } else {
-    showSizeModal(item, [], (_, notes) => {
+    showSizeModal(item, [], (_, notes, qty) => {
       state.selectedMeals.push({
         menuItem: item,
         sizeName: null,
         price: item.price,
+        quantity: qty,
         notes: notes,
         type: 'meal',
       });
@@ -546,6 +574,7 @@ function showSizeModal(item, sizes, callback) {
   const modal = document.getElementById('size-modal');
   document.getElementById('size-modal-name').textContent = item.name;
   document.getElementById('size-modal-notes').value = '';
+  document.getElementById('size-modal-qty').value = 1;
 
   const optionsEl = document.getElementById('size-options');
   let selectedSize = sizes.length > 0 ? sizes[0] : null;
@@ -567,12 +596,17 @@ function showSizeModal(item, sizes, callback) {
     optionsEl.style.display = '';
   }
 
+  const qtyInput = document.getElementById('size-modal-qty');
+  document.getElementById('size-qty-minus').onclick = () => { if (parseInt(qtyInput.value) > 1) qtyInput.value = parseInt(qtyInput.value) - 1; };
+  document.getElementById('size-qty-plus').onclick = () => { qtyInput.value = parseInt(qtyInput.value) + 1; };
+
   modal.style.display = 'flex';
 
   const confirmHandler = () => {
     const notes = document.getElementById('size-modal-notes').value.trim();
+    const qty = Math.max(1, parseInt(qtyInput.value) || 1);
     modal.style.display = 'none';
-    callback(selectedSize || { name: null, price: item.price }, notes);
+    callback(selectedSize || { name: null, price: item.price }, notes, qty);
     document.getElementById('size-confirm').removeEventListener('click', confirmHandler);
   };
   const cancelHandler = () => {
@@ -597,6 +631,11 @@ function showDrinkCustomizeModal(item, callback) {
   const modal = document.getElementById('drink-customize-modal');
   document.getElementById('customize-drink-name').textContent = item.name;
   document.getElementById('customize-notes').value = '';
+  document.getElementById('customize-qty').value = 1;
+
+  const qtyInput = document.getElementById('customize-qty');
+  document.getElementById('customize-qty-minus').onclick = () => { if (parseInt(qtyInput.value) > 1) qtyInput.value = parseInt(qtyInput.value) - 1; };
+  document.getElementById('customize-qty-plus').onclick = () => { qtyInput.value = parseInt(qtyInput.value) + 1; };
 
   const sizes = parseSizes(item.sizes);
   let selectedSize = sizes.length > 0 ? sizes[0] : null;
@@ -686,6 +725,7 @@ function showDrinkCustomizeModal(item, callback) {
     const base = selectedSize ? selectedSize.price : (item.price || 0);
     const toppingTotal = selectedToppings.reduce((sum, t) => sum + t.price, 0);
     const notes = document.getElementById('customize-notes').value.trim();
+    const qty = Math.max(1, parseInt(document.getElementById('customize-qty').value) || 1);
     modal.style.display = 'none';
     callback({
       menuItem: item,
@@ -696,6 +736,7 @@ function showDrinkCustomizeModal(item, callback) {
       ice: selectedIce,
       toppings: [...selectedToppings],
       toppingsPrice: toppingTotal,
+      quantity: qty,
       notes: notes,
       type: 'drink',
     });
@@ -724,8 +765,10 @@ function renderSelectedItems() {
 function renderGroup(containerId, items) {
   const el = document.getElementById(containerId);
   el.innerHTML = items.map((item, idx) => {
+    const qty = item.quantity || 1;
     let desc = item.menuItem.name;
     if (item.sizeName) desc += ` (${item.sizeName})`;
+    if (qty > 1) desc += ` ×${qty}`;
     let detail = '';
     if (item.sweetness) detail += item.sweetness + ' ';
     if (item.ice) detail += item.ice + ' ';
@@ -734,7 +777,7 @@ function renderGroup(containerId, items) {
     return `<div class="selected-item">
       <span class="si-name">${desc}</span>
       ${detail ? `<span class="si-detail">${detail}</span>` : ''}
-      <span class="si-price">$${item.price}</span>
+      <span class="si-price">$${item.price * qty}</span>
       <button class="si-remove" data-idx="${idx}" data-group="${containerId}">✕</button>
     </div>`;
   }).join('');
@@ -752,7 +795,7 @@ function renderGroup(containerId, items) {
 
 function updateOrderSummary() {
   const all = [...state.selectedMeals, ...state.selectedDrinks];
-  const total = all.reduce((sum, item) => sum + item.price, 0);
+  const total = all.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
   document.getElementById('order-total-amount').textContent = `$${total}`;
 
   const list = document.getElementById('order-summary-list');
@@ -760,10 +803,12 @@ function updateOrderSummary() {
     list.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">還沒選任何品項</p>';
   } else {
     list.innerHTML = all.map(item => {
+      const qty = item.quantity || 1;
       let name = item.menuItem.name;
       if (item.sizeName) name += ` (${item.sizeName})`;
+      if (qty > 1) name += ` ×${qty}`;
       return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:14px">
-        <span>${name}</span><span>$${item.price}</span>
+        <span>${name}</span><span>$${item.price * qty}</span>
       </div>`;
     }).join('');
   }
@@ -780,41 +825,68 @@ async function submitOrder() {
   const all = [...state.selectedMeals, ...state.selectedDrinks];
   if (all.length === 0) return;
 
-  const total = all.reduce((sum, item) => sum + item.price, 0);
+  const total = all.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+  const isAdminEdit = !!state.adminEditOrder;
+  const targetEmployeeId = isAdminEdit ? state.adminEditOrder.employeeId : state.currentUser.id;
 
   try {
-    // Create order
-    const [order] = await api('orders', {
-      method: 'POST',
-      body: {
-        session_id: state.currentSession.id,
-        employee_id: state.currentUser.id,
-        total_amount: total,
-        is_additional: !!state.currentSession.was_closed,
-      },
-    });
-
-    // Create order items
-    const items = all.map(item => ({
-      order_id: order.id,
-      menu_item_id: item.menuItem.id,
-      item_name: item.menuItem.name,
-      size_name: item.sizeName || null,
-      base_price: item.basePrice || item.price,
-      quantity: 1,
-      sweetness: item.sweetness || null,
-      ice: item.ice || null,
-      toppings: item.toppings || [],
-      toppings_price: item.toppingsPrice || 0,
-      notes: item.notes || null,
-      item_type: item.type,
-      total_price: item.price,
-    }));
-
-    await api('order_items', { method: 'POST', body: items });
-
-    toast('訂單送出成功！');
-    await checkExistingOrder();
+    if (isAdminEdit) {
+      const oldOrderId = state.adminEditOrder.orderId;
+      await api(`order_items?order_id=eq.${oldOrderId}`, { method: 'DELETE' });
+      await api(`orders?id=eq.${oldOrderId}`, {
+        method: 'PATCH',
+        body: { total_amount: total, updated_at: new Date().toISOString() }
+      });
+      const items = all.map(item => ({
+        order_id: oldOrderId,
+        menu_item_id: item.menuItem.id,
+        item_name: item.menuItem.name,
+        size_name: item.sizeName || null,
+        base_price: item.basePrice || item.price,
+        quantity: item.quantity || 1,
+        sweetness: item.sweetness || null,
+        ice: item.ice || null,
+        toppings: item.toppings || [],
+        toppings_price: item.toppingsPrice || 0,
+        notes: item.notes || null,
+        item_type: item.type,
+        total_price: item.price * (item.quantity || 1),
+      }));
+      await api('order_items', { method: 'POST', body: items });
+      const empName = state.adminEditOrder.employeeName;
+      state.adminEditOrder = null;
+      document.getElementById('admin-edit-banner').style.display = 'none';
+      toast(`已更新 ${empName} 的訂單`);
+      document.querySelector('[data-view="summary"]').click();
+    } else {
+      const [order] = await api('orders', {
+        method: 'POST',
+        body: {
+          session_id: state.currentSession.id,
+          employee_id: targetEmployeeId,
+          total_amount: total,
+          is_additional: !!state.currentSession.was_closed,
+        },
+      });
+      const items = all.map(item => ({
+        order_id: order.id,
+        menu_item_id: item.menuItem.id,
+        item_name: item.menuItem.name,
+        size_name: item.sizeName || null,
+        base_price: item.basePrice || item.price,
+        quantity: item.quantity || 1,
+        sweetness: item.sweetness || null,
+        ice: item.ice || null,
+        toppings: item.toppings || [],
+        toppings_price: item.toppingsPrice || 0,
+        notes: item.notes || null,
+        item_type: item.type,
+        total_price: item.price * (item.quantity || 1),
+      }));
+      await api('order_items', { method: 'POST', body: items });
+      toast('訂單送出成功！');
+      await checkExistingOrder();
+    }
   } catch (err) {
     toast('送出失敗：' + err.message);
     console.error(err);
@@ -929,28 +1001,105 @@ async function loadSummary() {
   `;
 
   // Detail by person
+  const isAdmin = state.currentUser && state.currentUser.is_admin;
+  const isCreator = state.currentSession && state.currentUser &&
+    state.currentSession.created_by === state.currentUser.id;
+  const canEdit = isAdmin || isCreator;
+
   let detailHtml = '';
   orders.forEach(order => {
     const name = order.employees ? order.employees.name : '未知';
-    const items = (order.order_items || []).map(item => {
-      let desc = item.item_name;
+    const orderItems = order.order_items || [];
+    const itemsHtml = orderItems.map(item => {
+      let desc = `・${item.item_name}`;
       if (item.size_name) desc += `(${item.size_name})`;
       if (item.sweetness) desc += ` ${item.sweetness}`;
       if (item.ice) desc += ` ${item.ice}`;
       const tops = item.toppings || [];
       if (tops.length) desc += ` +${tops.map(t => t.name).join('+')}`;
+      if (item.quantity > 1) desc += ` ×${item.quantity}`;
       if (item.notes) desc += ` 【${item.notes}】`;
-      return desc;
-    });
+      desc += ` $${item.total_price}`;
+      const deleteBtn = canEdit ? ` <button class="btn-icon summary-delete-item" data-item-id="${item.id}" data-order-id="${order.id}" title="刪除此品項" style="color:var(--danger);font-size:12px;padding:0 4px">✕</button>` : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between">${desc}${deleteBtn}</div>`;
+    }).join('');
     const addLabel = order.is_additional ? '<span style="color:var(--danger);font-weight:700;font-size:12px">追加 </span>' : '';
+    const orderActions = canEdit ? `<div style="display:flex;gap:6px;margin-top:6px">
+      <button class="btn btn-small summary-edit-order" data-order-id="${order.id}" data-employee-id="${order.employee_id}" data-employee-name="${name}">改單</button>
+      <button class="btn btn-small summary-delete-order" data-order-id="${order.id}" style="background:var(--danger);color:#fff">刪除</button>
+    </div>` : '';
     detailHtml += `<div class="summary-detail-person">
       <div class="person-name">${addLabel}${name}</div>
-      <div class="person-items">${items.map(i => `・${i}`).join('<br>')}</div>
-      <div class="person-total">$${order.total_amount}</div>
+      <div class="person-items">${itemsHtml}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="person-total">$${order.total_amount}</div>
+        ${orderActions}
+      </div>
     </div>`;
   });
   document.getElementById('summary-detail').innerHTML = detailHtml;
+
+  if (canEdit) {
+    document.querySelectorAll('.summary-delete-item').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const itemId = btn.dataset.itemId;
+        const orderId = btn.dataset.orderId;
+        if (!confirm('確定刪除此品項？')) return;
+        try {
+          await api(`order_items?id=eq.${itemId}`, { method: 'DELETE' });
+          const remaining = await api('order_items', {
+            params: { order_id: `eq.${orderId}`, select: 'total_price' }
+          });
+          const newTotal = (remaining || []).reduce((s, i) => s + i.total_price, 0);
+          await api(`orders?id=eq.${orderId}`, {
+            method: 'PATCH',
+            body: { total_amount: newTotal, updated_at: new Date().toISOString() }
+          });
+          toast('品項已刪除');
+          loadSummary();
+        } catch (err) {
+          toast('刪除失敗：' + err.message);
+        }
+      });
+    });
+
+    document.querySelectorAll('.summary-delete-order').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const orderId = btn.dataset.orderId;
+        if (!confirm('確定刪除此人整筆訂單？')) return;
+        try {
+          await api(`order_items?order_id=eq.${orderId}`, { method: 'DELETE' });
+          await api(`orders?id=eq.${orderId}`, { method: 'DELETE' });
+          toast('訂單已刪除');
+          loadSummary();
+        } catch (err) {
+          toast('刪除失敗：' + err.message);
+        }
+      });
+    });
+
+    document.querySelectorAll('.summary-edit-order').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const orderId = btn.dataset.orderId;
+        const employeeId = btn.dataset.employeeId;
+        const employeeName = btn.dataset.employeeName;
+        state.adminEditOrder = { orderId, employeeId, employeeName };
+        document.querySelector('[data-view="order"]').click();
+        document.getElementById('admin-edit-banner').style.display = '';
+        document.getElementById('admin-edit-name').textContent = employeeName;
+        document.getElementById('already-ordered').style.display = 'none';
+        showOrderForm();
+      });
+    });
+  }
 }
+
+// Cancel admin edit
+document.getElementById('admin-edit-cancel').addEventListener('click', () => {
+  state.adminEditOrder = null;
+  document.getElementById('admin-edit-banner').style.display = 'none';
+  checkExistingOrder();
+});
 
 // Copy summary to clipboard
 document.getElementById('copy-summary-btn').addEventListener('click', () => {
@@ -1029,15 +1178,25 @@ async function loadHistory() {
     }).join('');
   }
 
-  // Balance
-  const emp = await api('employees', {
-    params: { select: 'balance', id: `eq.${state.currentUser.id}` }
-  });
-  const balance = emp && emp[0] ? emp[0].balance : 0;
-  document.getElementById('balance-info').innerHTML = `
-    <span>目前餘額</span>
-    <span class="balance-amount">$${balance}</span>
-  `;
+  // Balance (show all wallets)
+  const ewList = await api('employee_wallets', {
+    params: { employee_id: `eq.${state.currentUser.id}`, select: '*,wallets(name)', order: 'wallet_id' }
+  }) || [];
+
+  if (ewList.length > 0) {
+    document.getElementById('balance-info').innerHTML = ewList.map(ew => {
+      const wName = ew.wallets ? ew.wallets.name : '—';
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0">
+        <span>${wName}</span>
+        <span class="balance-amount">$${ew.balance}</span>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('balance-info').innerHTML = `
+      <span>目前餘額</span>
+      <span class="balance-amount">$0</span>
+    `;
+  }
 }
 
 document.getElementById('prev-month').addEventListener('click', () => {
@@ -1055,8 +1214,10 @@ document.getElementById('next-month').addEventListener('click', () => {
 async function loadAdmin() {
   try {
     await loadRestaurants();
+    await loadWallets();
     renderAdminRestaurants();
     renderAdminEmployees();
+    renderAdminWalletSelect();
     await loadAdminSession();
   } catch (err) {
     console.error('loadAdmin error:', err);
@@ -1064,10 +1225,23 @@ async function loadAdmin() {
   }
 }
 
+function renderAdminWalletSelect() {
+  const el = document.getElementById('admin-wallet');
+  el.innerHTML = state.wallets.map(w =>
+    `<option value="${w.id}">${w.name}</option>`
+  ).join('');
+}
+
 async function loadRestaurants() {
   state.restaurants = await api('restaurants', {
     params: { select: '*', order: 'sort_order,name' }
   });
+}
+
+async function loadWallets() {
+  state.wallets = await api('wallets', {
+    params: { select: '*', order: 'sort_order' }
+  }) || [];
 }
 
 function renderAdminRestaurants() {
@@ -1209,7 +1383,16 @@ document.getElementById('add-employee-btn').addEventListener('click', async () =
   if (!name) return toast('請輸入姓名');
   const balance = parseInt(document.getElementById('new-employee-balance').value) || 0;
   try {
-    await api('employees', { method: 'POST', body: { name, balance } });
+    const [newEmp] = await api('employees', { method: 'POST', body: { name, balance } });
+    // Auto-create wallet entries for all wallets
+    if (newEmp && state.wallets.length > 0) {
+      for (const w of state.wallets) {
+        await api('employee_wallets', {
+          method: 'POST',
+          body: { employee_id: newEmp.id, wallet_id: w.id, balance: 0 }
+        });
+      }
+    }
     document.getElementById('new-employee-name').value = '';
     document.getElementById('new-employee-balance').value = '';
     await loadEmployees();
@@ -1517,7 +1700,7 @@ async function loadAdminSession() {
   const today = new Date().toISOString().slice(0, 10);
   const sessions = await api('order_sessions', {
     params: {
-      select: '*,employees!order_sessions_created_by_fkey(name)',
+      select: '*,employees!order_sessions_created_by_fkey(name),wallets(name)',
       date: `gte.${today}`,
       order: 'date,created_at',
     }
@@ -1549,7 +1732,7 @@ async function loadAdminSession() {
     return `<div class="admin-session-item">
       <div class="admin-session-info">
         <div class="as-title">${[mealRest ? mealRest.name : null, drinkRest ? drinkRest.name : null].filter(Boolean).join(' + ') || '—'}</div>
-        <div class="as-meta">${formatSessionDate(s.date)}${s.deadline ? '　截止 ' + s.deadline.slice(0, 5) : ''}　開團人：${creator}</div>
+        <div class="as-meta">${formatSessionDate(s.date)}${s.deadline ? '　截止 ' + s.deadline.slice(0, 5) : ''}　開團人：${creator}${s.wallets ? '　💰' + s.wallets.name : ''}</div>
       </div>
       <div class="item-actions">
         <span class="session-card-badge ${isOpen ? 'open' : s.is_settled ? 'settled' : 'closed'}">${isOpen ? '進行中' : s.is_settled ? '已結帳' : '已截止'}</span>
@@ -1575,9 +1758,9 @@ async function loadAdminSession() {
     btn.addEventListener('click', async () => {
       await api(`order_sessions?id=eq.${btn.dataset.id}`, {
         method: 'PATCH',
-        body: { status: 'open', is_settled: false }
+        body: { status: 'open', is_settled: false, deadline: null }
       });
-      toast('已重新開團');
+      toast('已重新開團（截止時間已清除）');
       loadAdminSession();
       loadAvailableSessions();
     });
@@ -1586,7 +1769,16 @@ async function loadAdminSession() {
   el.querySelectorAll('[data-action="settle-session"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const sessionId = btn.dataset.id;
-      if (!confirm('確定要結帳嗎？將從每位員工的錢包扣除訂單金額。')) return;
+      const session = sessions.find(s => s.id === sessionId);
+      const walletId = session ? session.wallet_id : null;
+      const walletName = session && session.wallets ? session.wallets.name : '未指定錢包';
+
+      if (!walletId) {
+        toast('此團未設定扣款錢包，無法結帳');
+        return;
+      }
+
+      if (!confirm(`確定要結帳嗎？將從「${walletName}」扣除每位員工的訂單金額。`)) return;
 
       try {
         const orders = await api('orders', {
@@ -1602,8 +1794,14 @@ async function loadAdminSession() {
           const emp = state.employees.find(e => e.id === order.employee_id);
           if (!emp) continue;
 
-          const newBalance = emp.balance - order.total_amount;
-          await api(`employees?id=eq.${emp.id}`, {
+          const ewRows = await api('employee_wallets', {
+            params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' }
+          });
+          const ew = ewRows && ewRows[0];
+          if (!ew) continue;
+
+          const newBalance = ew.balance - order.total_amount;
+          await api(`employee_wallets?id=eq.${ew.id}`, {
             method: 'PATCH',
             body: { balance: newBalance },
           });
@@ -1612,15 +1810,14 @@ async function loadAdminSession() {
             method: 'POST',
             body: {
               employee_id: emp.id,
+              wallet_id: walletId,
               amount: -order.total_amount,
               type: 'deduct',
               date: new Date().toISOString().slice(0, 10),
-              notes: `訂單扣款`,
+              notes: `訂單扣款（${walletName}）`,
               created_by: state.currentUser.id,
             }
           });
-
-          emp.balance = newBalance;
         }
 
         await api(`order_sessions?id=eq.${sessionId}`, {
@@ -1628,7 +1825,7 @@ async function loadAdminSession() {
           body: { is_settled: true }
         });
 
-        toast(`結帳完成！共 ${orders.length} 筆訂單`);
+        toast(`結帳完成！共 ${orders.length} 筆訂單，從「${walletName}」扣款`);
         loadAdminSession();
       } catch (err) {
         toast('結帳失敗：' + err.message);
@@ -1666,6 +1863,7 @@ document.getElementById('open-session-btn').addEventListener('click', async () =
   const date = document.getElementById('admin-session-date').value;
   const deadline = document.getElementById('admin-deadline').value || null;
   const notes = document.getElementById('admin-notes').value.trim() || null;
+  const walletId = document.getElementById('admin-wallet').value || null;
 
   try {
     await api('order_sessions', {
@@ -1676,6 +1874,7 @@ document.getElementById('open-session-btn').addEventListener('click', async () =
         drink_restaurant_id: drinkId,
         deadline,
         notes,
+        wallet_id: walletId,
         created_by: state.currentUser ? state.currentUser.id : null,
       }
     });
@@ -1813,28 +2012,62 @@ document.getElementById('menu-photo-img').addEventListener('dblclick', (e) => {
 
 // ---- Wallet ----
 async function loadWallet() {
+  await loadWallets();
+
+  // Populate wallet dropdown (topup form)
+  const walletSelect = document.getElementById('topup-wallet');
+  walletSelect.innerHTML = state.wallets.map(w =>
+    `<option value="${w.id}">${w.name}</option>`
+  ).join('');
+
+  // Populate wallet view selector
+  const viewSelect = document.getElementById('wallet-view-select');
+  viewSelect.innerHTML = state.wallets.map(w =>
+    `<option value="${w.id}">${w.name}</option>`
+  ).join('');
+  if (!state.currentWalletId && state.wallets.length > 0) {
+    state.currentWalletId = state.wallets[0].id;
+  }
+  viewSelect.value = state.currentWalletId;
+  viewSelect.onchange = () => {
+    state.currentWalletId = viewSelect.value;
+    renderWalletBalances();
+  };
+
   // Populate employee dropdown
   const select = document.getElementById('topup-employee');
   select.innerHTML = state.employees.map(e =>
-    `<option value="${e.id}">${e.name}（餘額 $${e.balance}）</option>`
+    `<option value="${e.id}">${e.name}</option>`
   ).join('');
 
-  // Set default date to today
   document.getElementById('topup-date').value = new Date().toISOString().slice(0, 10);
 
-  // Render all employees with balances
+  await renderWalletBalances();
+}
+
+async function renderWalletBalances() {
+  if (!state.currentWalletId) return;
+
+  const ewList = await api('employee_wallets', {
+    params: {
+      wallet_id: `eq.${state.currentWalletId}`,
+      select: '*,employees(name)',
+      order: 'balance',
+    }
+  }) || [];
+
   const el = document.getElementById('wallet-employee-list');
-  const sorted = [...state.employees].sort((a, b) => a.balance - b.balance);
-  el.innerHTML = sorted.map(e => {
-    const cls = e.balance >= 0 ? 'positive' : 'negative';
-    return `<div class="wallet-row" data-id="${e.id}">
-      <span class="wallet-name">${e.name}</span>
-      <span class="wallet-balance ${cls}">$${e.balance}</span>
+  el.innerHTML = ewList.map(ew => {
+    const name = ew.employees ? ew.employees.name : '—';
+    const cls = ew.balance >= 0 ? 'positive' : 'negative';
+    return `<div class="wallet-row" data-employee-id="${ew.employee_id}">
+      <span class="wallet-name">${name}</span>
+      <span class="wallet-balance ${cls}">$${ew.balance}</span>
     </div>`;
   }).join('');
 
   el.querySelectorAll('.wallet-row').forEach(row => {
-    row.addEventListener('click', () => loadWalletHistory(row.dataset.id));
+    row.addEventListener('click', () => loadWalletHistory(row.dataset.employeeId));
   });
 }
 
@@ -1845,14 +2078,17 @@ async function loadWalletHistory(employeeId) {
   document.getElementById('wallet-history-card').style.display = '';
   document.getElementById('wallet-history-name').textContent = emp.name;
 
-  const txs = await api('wallet_transactions', {
-    params: {
-      select: '*,employees!wallet_transactions_created_by_fkey(name)',
-      employee_id: `eq.${employeeId}`,
-      order: 'created_at.desc',
-      limit: '50',
-    }
-  });
+  const params = {
+    select: '*,employees!wallet_transactions_created_by_fkey(name),wallets(name)',
+    employee_id: `eq.${employeeId}`,
+    order: 'created_at.desc',
+    limit: '50',
+  };
+  if (state.currentWalletId) {
+    params.wallet_id = `eq.${state.currentWalletId}`;
+  }
+
+  const txs = await api('wallet_transactions', { params });
 
   const el = document.getElementById('wallet-history-list');
   if (!txs || txs.length === 0) {
@@ -1864,9 +2100,10 @@ async function loadWalletHistory(employeeId) {
     const isPlus = tx.amount > 0;
     const label = tx.type === 'topup' ? '儲值' : tx.type === 'adjustment' ? '調整' : '扣款';
     const by = tx.employees ? tx.employees.name : '';
+    const walletName = tx.wallets ? tx.wallets.name : '';
     return `<div class="wallet-tx">
       <div>
-        <div>${tx.date}　${label}</div>
+        <div>${tx.date}　${label}${walletName ? '　' + walletName : ''}</div>
         <div class="wallet-tx-info">${tx.notes || ''}${by ? '　操作人：' + by : ''}</div>
       </div>
       <span class="wallet-tx-amount ${isPlus ? 'plus' : 'minus'}">${isPlus ? '+' : ''}$${tx.amount}</span>
@@ -1875,22 +2112,26 @@ async function loadWalletHistory(employeeId) {
 }
 
 document.getElementById('topup-btn').addEventListener('click', async () => {
+  const walletId = document.getElementById('topup-wallet').value;
   const employeeId = document.getElementById('topup-employee').value;
   const amount = parseInt(document.getElementById('topup-amount').value);
   const date = document.getElementById('topup-date').value;
   const notes = document.getElementById('topup-notes').value.trim();
 
+  if (!walletId) return toast('請選擇錢包');
   if (!employeeId) return toast('請選擇員工');
   if (!amount || amount === 0) return toast('請輸入金額');
   if (!date) return toast('請選擇日期');
 
   const emp = state.employees.find(e => e.id === employeeId);
+  const wallet = state.wallets.find(w => w.id === walletId);
 
   try {
     await api('wallet_transactions', {
       method: 'POST',
       body: {
         employee_id: employeeId,
+        wallet_id: walletId,
         amount: amount,
         type: amount > 0 ? 'topup' : 'adjustment',
         date: date,
@@ -1899,17 +2140,27 @@ document.getElementById('topup-btn').addEventListener('click', async () => {
       }
     });
 
-    const newBalance = emp.balance + amount;
-    await api(`employees?id=eq.${employeeId}`, {
-      method: 'PATCH',
-      body: { balance: newBalance },
+    const ewRows = await api('employee_wallets', {
+      params: { employee_id: `eq.${employeeId}`, wallet_id: `eq.${walletId}`, select: 'id,balance' }
     });
-    emp.balance = newBalance;
+
+    if (ewRows && ewRows[0]) {
+      const newBalance = ewRows[0].balance + amount;
+      await api(`employee_wallets?id=eq.${ewRows[0].id}`, {
+        method: 'PATCH',
+        body: { balance: newBalance },
+      });
+    } else {
+      await api('employee_wallets', {
+        method: 'POST',
+        body: { employee_id: employeeId, wallet_id: walletId, balance: amount },
+      });
+    }
 
     document.getElementById('topup-amount').value = '';
     document.getElementById('topup-notes').value = '';
-    toast(`已為 ${emp.name} ${amount > 0 ? '儲值' : '調整'} $${amount}`);
-    loadWallet();
+    toast(`已為 ${emp.name}（${wallet.name}）${amount > 0 ? '儲值' : '調整'} $${amount}`);
+    await renderWalletBalances();
   } catch (err) {
     toast('操作失敗：' + err.message);
   }
@@ -1920,6 +2171,7 @@ async function init() {
   try {
     await loadRestaurants();
     await loadEmployees();
+    await loadWallets();
 
     const savedUserId = localStorage.getItem('lunch_user_id');
     if (savedUserId) {

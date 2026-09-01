@@ -48,6 +48,14 @@ CREATE TABLE toppings (
   sort_order INT DEFAULT 0
 );
 
+-- 錢包類型
+CREATE TABLE wallets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 員工
 CREATE TABLE employees (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -58,12 +66,22 @@ CREATE TABLE employees (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 員工錢包餘額
+CREATE TABLE employee_wallets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  balance INT DEFAULT 0,
+  UNIQUE(employee_id, wallet_id)
+);
+
 -- 每日點餐場次
 CREATE TABLE order_sessions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   meal_restaurant_id UUID REFERENCES restaurants(id),
   drink_restaurant_id UUID REFERENCES restaurants(id),
+  wallet_id UUID REFERENCES wallets(id),
   status TEXT DEFAULT 'open' CHECK (status IN ('open', 'closed', 'ordered')),
   deadline TIME,
   notes TEXT,
@@ -121,7 +139,9 @@ ALTER TABLE restaurants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE menu_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE menu_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE toppings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wallets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee_wallets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
@@ -130,7 +150,9 @@ CREATE POLICY "allow_all" ON restaurants FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON menu_categories FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON menu_items FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON toppings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON wallets FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON employees FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON employee_wallets FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON order_sessions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON orders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all" ON order_items FOR ALL USING (true) WITH CHECK (true);
@@ -487,6 +509,11 @@ INSERT INTO menu_items (restaurant_id, category_id, name, price, has_sweetness, 
 -- 單點區
 INSERT INTO menu_items (restaurant_id, category_id, name, price, has_sweetness, has_ice, sort_order, notes) VALUES
 ('a1000000-0000-0000-0000-000000000003', NULL, '椪糖脆脆', 20, FALSE, FALSE, 100, '單點小食');
+
+-- === 種子資料：錢包 ===
+INSERT INTO wallets (name, sort_order) VALUES
+('技術部錢包', 1),
+('總務錢包', 2);
 
 -- === 測試員工 ===
 INSERT INTO employees (name, balance, is_admin) VALUES

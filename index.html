@@ -96,6 +96,14 @@
         <button id="edit-order-btn" class="btn btn-secondary">修改訂單</button>
       </div>
 
+      <!-- 管理員改單提示 -->
+      <div id="admin-edit-banner" class="card" style="display:none;background:var(--warning-bg,#fff8e1);border-left:4px solid var(--warning-color,#f9a825);padding:12px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span>📝 正在為 <strong id="admin-edit-name"></strong> 改單</span>
+          <button id="admin-edit-cancel" class="btn btn-small btn-secondary">取消改單</button>
+        </div>
+      </div>
+
       <!-- 點餐表單 -->
       <div id="order-form" style="display:none">
         <!-- 正餐區 -->
@@ -178,24 +186,31 @@
     <!-- ========== 錢包頁 ========== -->
     <section id="view-wallet" class="view">
       <div class="card" id="topup-card">
-        <h3>💰 儲值</h3>
+        <h3>💰 儲值｜手動結算</h3>
+        <div class="form-group">
+          <label>選擇錢包</label>
+          <select id="topup-wallet"></select>
+        </div>
         <div class="form-group">
           <label>選擇員工</label>
           <select id="topup-employee"></select>
         </div>
         <div class="form-row">
-          <input type="number" id="topup-amount" placeholder="金額（例：1000）">
+          <input type="number" id="topup-amount" placeholder="金額（例：1000 或 -50）">
           <input type="date" id="topup-date">
         </div>
         <div class="form-group">
           <label>備註</label>
           <input type="text" id="topup-notes" placeholder="例：8月份餐費">
         </div>
-        <button id="topup-btn" class="btn btn-primary btn-block">儲值</button>
+        <button id="topup-btn" class="btn btn-primary btn-block">儲值｜手動結算</button>
       </div>
 
       <div class="card">
         <h3>👥 全員餘額總覽</h3>
+        <div class="form-group" style="margin-bottom:8px">
+          <select id="wallet-view-select" style="font-size:14px"></select>
+        </div>
         <div id="wallet-employee-list"></div>
       </div>
 
@@ -241,6 +256,10 @@
             <label>截止時間</label>
             <input type="time" id="admin-deadline" value="10:30">
           </div>
+        </div>
+        <div class="form-group">
+          <label>扣款錢包</label>
+          <select id="admin-wallet"></select>
         </div>
         <div class="form-group">
           <label>備註</label>
@@ -338,6 +357,14 @@
         <div id="customize-toppings" class="option-group"></div>
       </div>
       <div class="form-group">
+        <label>數量</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button type="button" class="btn btn-small" id="customize-qty-minus">－</button>
+          <input type="number" id="customize-qty" value="1" min="1" style="width:60px;text-align:center">
+          <button type="button" class="btn btn-small" id="customize-qty-plus">＋</button>
+        </div>
+      </div>
+      <div class="form-group">
         <label>備註</label>
         <input type="text" id="customize-notes" placeholder="例：不要太甜">
       </div>
@@ -356,6 +383,14 @@
     <div class="modal-content modal-small">
       <h3 id="size-modal-name"></h3>
       <div id="size-options" class="option-group"></div>
+      <div class="form-group">
+        <label>數量</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button type="button" class="btn btn-small" id="size-qty-minus">－</button>
+          <input type="number" id="size-modal-qty" value="1" min="1" style="width:60px;text-align:center">
+          <button type="button" class="btn btn-small" id="size-qty-plus">＋</button>
+        </div>
+      </div>
       <div class="form-group">
         <label>備註</label>
         <input type="text" id="size-modal-notes" placeholder="例：不要香菜">
