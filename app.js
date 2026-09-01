@@ -1338,7 +1338,6 @@ function renderAdminEmployees() {
     <div class="admin-list-item">
       <span>${e.name} ${e.is_admin ? '👑' : ''}</span>
       <div class="item-actions">
-        <span style="font-size:13px;color:var(--text-secondary)">餘額 $${e.balance}</span>
         <button class="btn btn-small" data-action="rename-employee" data-id="${e.id}">改名</button>
         <button class="btn btn-small btn-danger" data-action="delete-employee" data-id="${e.id}">刪除</button>
       </div>
