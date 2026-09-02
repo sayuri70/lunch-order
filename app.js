@@ -8,6 +8,25 @@ const SUPABASE_KEY = 'sb_publishable_KbfVHbfTr5VgH2t7kuVMCQ_2C8639ev';
 const SWEETNESS_OPTIONS = ['全糖', '七分糖', '五分糖', '三分糖', '一分糖', '無糖'];
 const ICE_OPTIONS = ['正常冰', '少冰', '微冰', '去冰', '溫飲', '熱飲'];
 
+const EMPLOYEE_ORDER = [
+  '總經理','子鑒廠長','思綺經理','嘉雯','香瑄','映嬅','倩瑜',
+  '欽凱經理','言瑾','汶斐','敏圓經理','晨揚','花花經理','秀如','宛臻',
+  '天龍經理','蕙怡經理','文慧','小綠','怡廷','珈煊','語辰',
+  '明道部長','明春經理','坤保經理','長諺','冠宇','玫君','玟萱',
+  '藹倫','孟修','奇彥','玉珍','鎵宜','孟祐','鈺筑','瑜臻',
+  '雅涵','偉智','俊霆','志誠','怡均','廣浩','芮庭'
+];
+function sortEmployees(list) {
+  return [...list].sort((a, b) => {
+    const ai = EMPLOYEE_ORDER.indexOf(a.name);
+    const bi = EMPLOYEE_ORDER.indexOf(b.name);
+    if (ai === -1 && bi === -1) return a.name.localeCompare(b.name, 'zh-Hant');
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+}
+
 function toDirectImageUrl(url) {
   if (!url) return url;
   const match = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
@@ -108,9 +127,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 // ---- Identity ----
 async function loadEmployees() {
-  state.employees = await api('employees', {
-    params: { select: '*', is_active: 'eq.true', order: 'name' }
+  const raw = await api('employees', {
+    params: { select: '*', is_active: 'eq.true' }
   });
+  state.employees = sortEmployees(raw);
   renderEmployeeModal();
 }
 
@@ -1334,8 +1354,8 @@ function renderAdminRestaurants() {
 
 function renderAdminEmployees() {
   const el = document.getElementById('admin-employee-list');
-  el.innerHTML = state.employees.map(e => `
-    <div class="admin-list-item">
+  el.innerHTML = state.employees.map((e, i) => `
+    <div class="admin-list-item" style="background:${i % 2 === 0 ? '#f7f7f7' : '#ffffff'}">
       <span>${e.name} ${e.is_admin ? '👑' : ''}</span>
       <div class="item-actions">
         <button class="btn btn-small" data-action="rename-employee" data-id="${e.id}">改名</button>
@@ -2051,15 +2071,25 @@ async function renderWalletBalances() {
     params: {
       wallet_id: `eq.${state.currentWalletId}`,
       select: '*,employees(name)',
-      order: 'balance',
     }
   }) || [];
 
+  ewList.sort((a, b) => {
+    const an = a.employees ? a.employees.name : '';
+    const bn = b.employees ? b.employees.name : '';
+    const ai = EMPLOYEE_ORDER.indexOf(an);
+    const bi = EMPLOYEE_ORDER.indexOf(bn);
+    if (ai === -1 && bi === -1) return an.localeCompare(bn, 'zh-Hant');
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
   const el = document.getElementById('wallet-employee-list');
-  el.innerHTML = ewList.map(ew => {
+  el.innerHTML = ewList.map((ew, i) => {
     const name = ew.employees ? ew.employees.name : '—';
     const cls = ew.balance >= 0 ? 'positive' : 'negative';
-    return `<div class="wallet-row" data-employee-id="${ew.employee_id}">
+    return `<div class="wallet-row" data-employee-id="${ew.employee_id}" style="background:${i % 2 === 0 ? '#f7f7f7' : '#ffffff'}">
       <span class="wallet-name">${name}</span>
       <span class="wallet-balance ${cls}">$${ew.balance}</span>
     </div>`;
