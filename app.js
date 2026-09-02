@@ -124,6 +124,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       state.adminEditOrder = null;
       document.getElementById('admin-edit-banner').style.display = 'none';
     }
+    if (view !== 'order' && state.pendingDeleteOrder) {
+      state.existingOrder = state.pendingDeleteOrder;
+      state.pendingDeleteOrder = null;
+    }
     if (view === 'summary') loadSummary();
     if (view === 'history') loadHistory();
     if (view === 'wallet') loadWallet();
@@ -531,10 +535,9 @@ function showOrderForm() {
 }
 
 document.getElementById('edit-order-btn').addEventListener('click', async () => {
+  if (!confirm('確定要修改訂單嗎？')) return;
   if (state.existingOrder) {
-    // Delete existing order to re-order
-    await api(`order_items?order_id=eq.${state.existingOrder.id}`, { method: 'DELETE' });
-    await api(`orders?id=eq.${state.existingOrder.id}`, { method: 'DELETE' });
+    state.pendingDeleteOrder = state.existingOrder;
     state.existingOrder = null;
   }
   showOrderForm();
@@ -1029,6 +1032,13 @@ async function submitOrder() {
         total_price: item.price * (item.quantity || 1),
       }));
       await api('order_items', { method: 'POST', body: items });
+
+      if (state.pendingDeleteOrder) {
+        await api(`order_items?order_id=eq.${state.pendingDeleteOrder.id}`, { method: 'DELETE' });
+        await api(`orders?id=eq.${state.pendingDeleteOrder.id}`, { method: 'DELETE' });
+        state.pendingDeleteOrder = null;
+      }
+
       toast('訂單送出成功！');
       await checkExistingOrder();
     }
