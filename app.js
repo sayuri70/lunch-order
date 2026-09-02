@@ -41,10 +41,6 @@ const PIN_REQUIRED_IDS = [
   'a475eda0-3ca8-4a5c-b951-d0e435efb005',
   'e2e1ef61-d57e-4aad-ac83-95fc0eef844e',
 ];
-function getPinStore() {
-  try { return JSON.parse(localStorage.getItem('lunch_pins') || '{}'); } catch { return {}; }
-}
-function savePinStore(store) { localStorage.setItem('lunch_pins', JSON.stringify(store)); }
 
 // ---- State ----
 const state = {
@@ -159,8 +155,8 @@ function selectUser(id) {
   if (!emp) return;
 
   if (PIN_REQUIRED_IDS.includes(id)) {
-    const store = getPinStore();
-    const hasPin = !!store[id];
+    const savedPin = emp.balance ? String(emp.balance) : '';
+    const hasPin = savedPin.length === 4;
     const titleEl = document.getElementById('pin-modal').querySelector('h2');
     const nameEl = document.getElementById('pin-modal-name');
     nameEl.textContent = emp.name;
@@ -177,7 +173,7 @@ function selectUser(id) {
     document.getElementById('pin-modal').style.display = 'flex';
     document.getElementById('pin-input').focus();
 
-    document.getElementById('pin-confirm').onclick = () => {
+    document.getElementById('pin-confirm').onclick = async () => {
       const entered = document.getElementById('pin-input').value;
       if (entered.length !== 4 || !/^\d{4}$/.test(entered)) {
         document.getElementById('pin-error').textContent = '請輸入 4 位數字';
@@ -185,12 +181,12 @@ function selectUser(id) {
         return;
       }
       if (!hasPin) {
-        store[id] = entered;
-        savePinStore(store);
+        await api(`employees?id=eq.${id}`, { method: 'PATCH', body: { balance: parseInt(entered) } });
+        emp.balance = parseInt(entered);
         document.getElementById('pin-modal').style.display = 'none';
-        toast('PIN 碼已設定');
+        toast('PIN 碼已設定，所有裝置皆可使用');
         completeLogin(emp);
-      } else if (entered === store[id]) {
+      } else if (entered === savedPin) {
         document.getElementById('pin-modal').style.display = 'none';
         completeLogin(emp);
       } else {
@@ -1483,10 +1479,9 @@ function renderAdminRestaurants() {
 
 function renderAdminEmployees() {
   const el = document.getElementById('admin-employee-list');
-  const pinStore = getPinStore();
   el.innerHTML = state.employees.map((e, i) => {
     const needsPin = PIN_REQUIRED_IDS.includes(e.id);
-    const hasPin = !!pinStore[e.id];
+    const hasPin = needsPin && e.balance && String(e.balance).length === 4;
     const pinBadge = needsPin ? (hasPin ? ' 🔒' : ' 🔓') : '';
     return `<div class="admin-list-item" style="background:${i % 2 === 0 ? '#f7f7f7' : '#ffffff'}">
       <span>${e.name} ${e.is_admin ? '👑' : ''}${pinBadge}</span>
@@ -1515,11 +1510,11 @@ function renderAdminEmployees() {
   });
 
   el.querySelectorAll('[data-action="reset-pin"]').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       if (!confirm(`確定要重設「${btn.dataset.name}」的 PIN 碼？\n下次登入時會需要重新設定。`)) return;
-      const store = getPinStore();
-      delete store[btn.dataset.id];
-      savePinStore(store);
+      await api(`employees?id=eq.${btn.dataset.id}`, { method: 'PATCH', body: { balance: 0 } });
+      const emp = state.employees.find(e => e.id === btn.dataset.id);
+      if (emp) emp.balance = 0;
       renderAdminEmployees();
       toast(`${btn.dataset.name} 的 PIN 碼已重設`);
     });
