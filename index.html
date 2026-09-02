@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>吃飽喝足點餐系統</title>
-  <link rel="stylesheet" href="style.css?v=20260902c">
+  <link rel="stylesheet" href="style.css?v=20260902e">
 </head>
 <body>
   <!-- 身份選擇遮罩 -->
@@ -12,6 +12,21 @@
     <div class="modal-content">
       <h2>選擇你的名字</h2>
       <div id="employee-list" class="employee-grid"></div>
+    </div>
+  </div>
+
+  <!-- PIN 碼驗證 -->
+  <div id="pin-modal" class="modal" style="display:none">
+    <div class="modal-content" style="max-width:320px;text-align:center">
+      <h2 style="margin-bottom:4px">🔒 請輸入 PIN 碼</h2>
+      <p id="pin-modal-name" style="color:var(--text-secondary);margin-bottom:16px"></p>
+      <input type="password" id="pin-input" inputmode="numeric" maxlength="4" pattern="[0-9]*"
+        placeholder="4 位數字" style="font-size:24px;text-align:center;letter-spacing:8px;width:160px;padding:12px;border:2px solid var(--border);border-radius:8px">
+      <p id="pin-error" style="color:var(--danger);font-size:13px;margin-top:8px;display:none">PIN 碼錯誤</p>
+      <div style="margin-top:16px;display:flex;gap:8px;justify-content:center">
+        <button id="pin-cancel" class="btn btn-secondary">取消</button>
+        <button id="pin-confirm" class="btn btn-primary">確認</button>
+      </div>
     </div>
   </div>
 
@@ -441,6 +456,6 @@
   <!-- Toast 通知 -->
   <div id="toast" class="toast"></div>
 
-  <script src="app.js?v=20260902c"></script>
+  <script src="app.js?v=20260902e"></script>
 </body>
 </html>
