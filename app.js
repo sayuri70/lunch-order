@@ -367,6 +367,7 @@ async function selectSession(session) {
       }
     });
     document.getElementById('meal-section').style.display = '';
+    renderMenuBrowser('meal-menu-browser', state.mealMenuItems, onSelectMeal);
   } else {
     state.mealMenuItems = [];
     document.getElementById('meal-section').style.display = 'none';
@@ -384,6 +385,7 @@ async function selectSession(session) {
       params: { restaurant_id: `eq.${drinkRest.id}`, order: 'sort_order' }
     });
     document.getElementById('drink-section').style.display = '';
+    renderMenuBrowser('drink-menu-browser', state.drinkMenuItems, onSelectDrink);
     const drinkHint = document.getElementById('drink-no-menu-hint');
     if (drinkHint) drinkHint.style.display = state.drinkMenuItems.length === 0 ? '' : 'none';
   } else {
@@ -559,6 +561,66 @@ function escapeHtml(str) {
 // Setup searches
 setupSearch('meal-search', 'meal-results', () => state.mealMenuItems, onSelectMeal);
 setupSearch('drink-search', 'drink-results', () => state.drinkMenuItems, onSelectDrink);
+
+function renderMenuBrowser(containerId, items, onSelect) {
+  const el = document.getElementById(containerId);
+  if (!items || items.length === 0) { el.innerHTML = ''; return; }
+
+  const cats = {};
+  items.forEach(item => {
+    const catName = item.menu_categories ? item.menu_categories.name : '其他';
+    if (!cats[catName]) cats[catName] = [];
+    cats[catName].push(item);
+  });
+
+  const catNames = Object.keys(cats);
+  el.innerHTML = `
+    <button class="menu-browser-toggle" data-target="${containerId}-body">
+      <span class="arrow">▶</span> 瀏覽完整菜單
+    </button>
+    <div id="${containerId}-body" class="menu-browser-body">
+      ${catNames.map((cat, ci) => `
+        <div class="menu-cat-header" data-cat-idx="${ci}">
+          <span class="arrow">▶</span> ${cat}
+        </div>
+        <div class="menu-cat-items" data-cat-body="${ci}">
+          ${cats[cat].map(item => {
+            const sizes = parseSizes(item.sizes);
+            const priceStr = sizes.length > 0
+              ? sizes.map(s => `${s.name}$${s.price}`).join(' / ')
+              : (item.price != null ? `$${item.price}` : '');
+            return `<div class="menu-cat-item" data-item-id="${item.id}">
+              <span class="menu-cat-item-name">${item.name}</span>
+              <span class="menu-cat-item-price">${priceStr}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      `).join('')}
+    </div>`;
+
+  el.querySelector('.menu-browser-toggle').addEventListener('click', function() {
+    const body = document.getElementById(this.dataset.target);
+    const arrow = this.querySelector('.arrow');
+    body.classList.toggle('open');
+    arrow.classList.toggle('open');
+  });
+
+  el.querySelectorAll('.menu-cat-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const body = el.querySelector(`[data-cat-body="${h.dataset.catIdx}"]`);
+      const arrow = h.querySelector('.arrow');
+      body.classList.toggle('open');
+      arrow.classList.toggle('open');
+    });
+  });
+
+  el.querySelectorAll('.menu-cat-item').forEach(row => {
+    row.addEventListener('click', () => {
+      const item = items.find(i => i.id === row.dataset.itemId);
+      if (item) onSelect(item);
+    });
+  });
+}
 
 // ---- Meal Selection ----
 function onSelectMeal(item) {
