@@ -1012,7 +1012,7 @@ async function loadSummary() {
     const target = order.is_additional ? aggAdditional : agg;
     (order.order_items || []).forEach(item => {
       const toppingNames = (item.toppings || []).map(t => t.name).sort().join('+');
-      const key = `${item.item_name}|${item.size_name || ''}|${item.item_type}|${item.sweetness || ''}|${item.ice || ''}|${toppingNames}`;
+      const key = `${item.item_name}|${item.size_name || ''}|${item.item_type}|${item.sweetness || ''}|${item.ice || ''}|${toppingNames}|${item.notes || ''}`;
       if (!target[key]) {
         target[key] = {
           name: item.item_name,
