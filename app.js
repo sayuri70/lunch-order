@@ -8,6 +8,14 @@ const SUPABASE_KEY = 'sb_publishable_KbfVHbfTr5VgH2t7kuVMCQ_2C8639ev';
 const SWEETNESS_OPTIONS = ['全糖', '七分糖', '五分糖', '三分糖', '一分糖', '無糖'];
 const ICE_OPTIONS = ['正常冰', '少冰', '微冰', '去冰', '溫飲', '熱飲'];
 
+const MEAL_CATEGORIES = [
+  { label: '便當', names: ['鳳翔燒臘','龍恩焢肉飯','椒麻雞便當','合珍屋食坊','梁社漢排骨','徐家雞腿飯','南部灶咖','秦記排骨','阿嬤古早味','池上飯包','成大器烤肉飯','三哥','十金鵝'] },
+  { label: '丼飯', names: ['路邊野雞','簡單吃碗飯','黃燜雞米飯','鮑汁燜雞米飯','相家。雞','惠香嘉義火雞肉飯'] },
+  { label: '麵食', names: ['溢煌排骨酥麵','楠涵風味餐','新北市老黃牛雜','央二巷','西螺鴨膳師','花山家','兩支北方麵食館','上和魚刺肉羹','三舅媽的店','三九餃子館'] },
+  { label: '火鍋', names: ['巧媽臭臭鍋'] },
+  { label: '小吃', names: ['謝家油飯','寶島麵線-甜不辣','玖零后碳烤吐司','台灣第一米粉湯','老爹牛排','八方雲集'] },
+];
+
 const EMPLOYEE_ORDER = [
   '總經理','子鑒廠長','思綺經理','嘉雯','香瑄','映嬅','倩瑜',
   '欽凱經理','言瑾','汶斐','敏圓經理','晨揚','花花經理','秀如','宛臻',
@@ -1547,8 +1555,19 @@ function renderAdminRestaurants() {
   const activeMeals = state.restaurants.filter(r => r.type === 'meal' && r.is_active);
   const activeDrinks = state.restaurants.filter(r => r.type === 'drink' && r.is_active);
 
+  const grouped = {};
+  MEAL_CATEGORIES.forEach(c => { grouped[c.label] = []; });
+  grouped['其他'] = [];
+  activeMeals.forEach(r => {
+    const clean = r.name.replace(/^\(V\)/, '');
+    const cat = MEAL_CATEGORIES.find(c => c.names.some(n => clean.includes(n)));
+    grouped[cat ? cat.label : '其他'].push(r);
+  });
   mealSelect.innerHTML = '<option value="">— 不訂正餐 —</option>' +
-    activeMeals.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    [...MEAL_CATEGORIES.map(c => c.label), '其他']
+      .filter(cat => grouped[cat].length > 0)
+      .map(cat => `<optgroup label="── ${cat} ──">${grouped[cat].map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</optgroup>`)
+      .join('');
   drinkSelect.innerHTML = '<option value="">— 不訂飲料 —</option>' +
     activeDrinks.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
 }
