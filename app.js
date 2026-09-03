@@ -464,6 +464,29 @@ async function selectSession(session) {
   }
 
   await checkExistingOrder();
+
+  // Show restaurant reminder if exists
+  const reminders = [];
+  if (mealRest && mealRest.reminder) reminders.push({ rest: mealRest });
+  if (drinkRest && drinkRest.reminder) reminders.push({ rest: drinkRest });
+  if (reminders.length > 0) showReminderModal(reminders);
+}
+
+function showReminderModal(reminders) {
+  const r = reminders[0];
+  document.getElementById('reminder-modal-restaurant').textContent = r.rest.name;
+  document.getElementById('reminder-modal-text').textContent = r.rest.reminder;
+  document.getElementById('reminder-modal').style.display = 'flex';
+
+  document.getElementById('reminder-dismiss-btn').onclick = async () => {
+    await api(`restaurants?id=eq.${r.rest.id}`, {
+      method: 'PATCH', body: { reminder: null }
+    });
+    r.rest.reminder = null;
+    document.getElementById('reminder-modal').style.display = 'none';
+    reminders.shift();
+    if (reminders.length > 0) showReminderModal(reminders);
+  };
 }
 
 document.getElementById('back-to-sessions').addEventListener('click', () => {
@@ -1158,6 +1181,16 @@ async function loadSummary() {
     <span>總金額 $${grandTotal}</span>
   `;
 
+  // Reminder section
+  const reminderSection = document.getElementById('summary-reminder-section');
+  const reminderCurrent = document.getElementById('reminder-current');
+  if (mealRest && mealRest.reminder) {
+    document.getElementById('reminder-current-text').textContent = '⚠️ ' + mealRest.reminder;
+    reminderCurrent.style.display = '';
+  } else {
+    reminderCurrent.style.display = 'none';
+  }
+
   // Detail by person
   const isAdmin = state.currentUser && state.currentUser.is_admin;
   const isCreator = state.currentSession && state.currentUser &&
@@ -1266,6 +1299,33 @@ document.getElementById('copy-summary-btn').addEventListener('click', () => {
   const date = document.getElementById('summary-date');
   const text = `📋 ${date.textContent}\n\n${content.innerText}\n\n${stats.innerText}`;
   navigator.clipboard.writeText(text).then(() => toast('已複製到剪貼簿'));
+});
+
+// ---- Restaurant Reminder ----
+document.getElementById('set-reminder-btn').addEventListener('click', async () => {
+  if (!state.currentSession) return;
+  const mealRest = state.restaurants.find(r => r.id === state.currentSession.meal_restaurant_id);
+  if (!mealRest) return toast('此團沒有正餐餐廳');
+  const text = prompt(`為「${mealRest.name}」新增提醒（下次開團時會提示）：`);
+  if (!text) return;
+  await api(`restaurants?id=eq.${mealRest.id}`, {
+    method: 'PATCH', body: { reminder: text }
+  });
+  mealRest.reminder = text;
+  toast('提醒已設定');
+  loadSummary();
+});
+
+document.getElementById('clear-reminder-btn').addEventListener('click', async () => {
+  if (!state.currentSession) return;
+  const mealRest = state.restaurants.find(r => r.id === state.currentSession.meal_restaurant_id);
+  if (!mealRest) return;
+  await api(`restaurants?id=eq.${mealRest.id}`, {
+    method: 'PATCH', body: { reminder: null }
+  });
+  mealRest.reminder = null;
+  toast('提醒已清除');
+  loadSummary();
 });
 
 // ---- History View ----
