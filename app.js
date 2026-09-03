@@ -219,6 +219,8 @@ function completeLogin(emp) {
   document.getElementById('identity-modal').style.display = 'none';
   applyAdminVisibility();
   loadTodaySession();
+  const activeView = document.querySelector('.nav-btn.active');
+  if (activeView && activeView.dataset.view === 'wallet') loadWallet();
 }
 
 function applyAdminVisibility() {
