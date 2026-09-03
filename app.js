@@ -465,11 +465,14 @@ async function selectSession(session) {
 
   await checkExistingOrder();
 
-  // Show restaurant reminder if exists
-  const reminders = [];
-  if (mealRest && mealRest.reminder) reminders.push({ rest: mealRest });
-  if (drinkRest && drinkRest.reminder) reminders.push({ rest: drinkRest });
-  if (reminders.length > 0) showReminderModal(reminders);
+  // Show restaurant reminder (admin/creator only)
+  const isSessionCreator = session.created_by === state.currentUser?.id;
+  if (state.currentUser?.is_admin || isSessionCreator) {
+    const reminders = [];
+    if (mealRest && mealRest.reminder) reminders.push({ rest: mealRest });
+    if (drinkRest && drinkRest.reminder) reminders.push({ rest: drinkRest });
+    if (reminders.length > 0) showReminderModal(reminders);
+  }
 }
 
 function showReminderModal(reminders) {
