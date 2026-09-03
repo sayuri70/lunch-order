@@ -15,6 +15,18 @@ const MEAL_CATEGORIES = [
   { label: '火鍋', names: ['巧媽臭臭鍋'] },
   { label: '小吃', names: ['謝家油飯','寶島麵線-甜不辣','玖零后碳烤吐司','台灣第一米粉湯','老爹牛排','八方雲集'] },
 ];
+function getMealCategoryLabel(name) {
+  const clean = name.replace(/^\(V\)/, '');
+  const cat = MEAL_CATEGORIES.find(c => c.names.some(n => clean.includes(n)));
+  return cat ? cat.label : '其他';
+}
+function groupMealsByCategory(meals) {
+  const grouped = {};
+  MEAL_CATEGORIES.forEach(c => { grouped[c.label] = []; });
+  grouped['其他'] = [];
+  meals.forEach(r => { grouped[getMealCategoryLabel(r.name)].push(r); });
+  return [...MEAL_CATEGORIES.map(c => c.label), '其他'].filter(cat => grouped[cat].length > 0).map(cat => ({ label: cat, items: grouped[cat] }));
+}
 
 const EMPLOYEE_ORDER = [
   '總經理','子鑒廠長','思綺經理','嘉雯','香瑄','映嬅','倩瑜',
@@ -1501,7 +1513,8 @@ function renderAdminRestaurants() {
     </div>`;
   }
 
-  el.innerHTML = renderGroup('正餐', '🍱', meals, false) + renderGroup('飲料', '🧋', drinks, false);
+  const mealGroups = groupMealsByCategory(meals);
+  el.innerHTML = mealGroups.map(g => renderGroup(g.label, '🍱', g.items, true)).join('') + renderGroup('飲料', '🧋', drinks, true);
 
   el.querySelectorAll('.rest-group-header').forEach(header => {
     header.addEventListener('click', () => {
@@ -1555,18 +1568,9 @@ function renderAdminRestaurants() {
   const activeMeals = state.restaurants.filter(r => r.type === 'meal' && r.is_active);
   const activeDrinks = state.restaurants.filter(r => r.type === 'drink' && r.is_active);
 
-  const grouped = {};
-  MEAL_CATEGORIES.forEach(c => { grouped[c.label] = []; });
-  grouped['其他'] = [];
-  activeMeals.forEach(r => {
-    const clean = r.name.replace(/^\(V\)/, '');
-    const cat = MEAL_CATEGORIES.find(c => c.names.some(n => clean.includes(n)));
-    grouped[cat ? cat.label : '其他'].push(r);
-  });
   mealSelect.innerHTML = '<option value="">— 不訂正餐 —</option>' +
-    [...MEAL_CATEGORIES.map(c => c.label), '其他']
-      .filter(cat => grouped[cat].length > 0)
-      .map(cat => `<optgroup label="── ${cat} ──">${grouped[cat].map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</optgroup>`)
+    groupMealsByCategory(activeMeals)
+      .map(g => `<optgroup label="── ${g.label} ──">${g.items.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</optgroup>`)
       .join('');
   drinkSelect.innerHTML = '<option value="">— 不訂飲料 —</option>' +
     activeDrinks.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
