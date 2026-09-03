@@ -1122,6 +1122,7 @@ async function loadSummary() {
     for (const [type, label] of Object.entries(groups)) {
       const items = byType[type];
       if (!items || items.length === 0) continue;
+      items.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
       html += `<div class="summary-group"><div class="summary-group-title"${prefix ? ' style="color:var(--danger)"' : ''}>【${prefix ? '追加 ' : ''}${label}】</div>`;
       items.forEach(item => {
         let line = `・${item.name}`;
