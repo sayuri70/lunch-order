@@ -2157,26 +2157,26 @@ function spinWheel(type) {
   display.style.display = '';
   textEl.classList.remove('winner');
 
-  const target = Math.floor(Math.random() * list.length);
-  const totalSteps = list.length * 4 + target;
-  let step = 0;
-  let speed = 60;
+  const n = list.length;
+  const target = Math.floor(Math.random() * n);
+  const sequence = [];
+  for (let i = 0; i < 10; i++) {
+    let r; do { r = Math.floor(Math.random() * n); } while (r === target && n > 2);
+    sequence.push(r);
+  }
+  for (let i = 8; i >= 1; i--) sequence.push(((target - i) % n + n) % n);
+  sequence.push(target);
 
+  let step = 0, speed = 50;
   function tick() {
-    const idx = step % list.length;
-    textEl.textContent = list[idx].name;
+    textEl.textContent = list[sequence[step]].name;
     step++;
-
-    if (step >= totalSteps) {
+    if (step >= sequence.length) {
       textEl.classList.add('winner');
-      const selectId = type === 'meal' ? 'admin-meal-restaurant' : 'admin-drink-restaurant';
-      document.getElementById(selectId).value = list[target].id;
+      document.getElementById(type === 'meal' ? 'admin-meal-restaurant' : 'admin-drink-restaurant').value = list[target].id;
       return;
     }
-
-    if (step > totalSteps - list.length) speed += 40;
-    else if (step > totalSteps - list.length * 2) speed += 15;
-
+    if (step > 10) speed *= 1.4;
     setTimeout(tick, speed);
   }
   tick();
