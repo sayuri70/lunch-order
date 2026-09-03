@@ -2189,7 +2189,9 @@ async function loadWallet() {
     `<option value="${w.id}">${w.name}</option>`
   ).join('');
 
-  // Populate wallet view selector
+  const isAdmin = state.currentUser && state.currentUser.is_admin;
+
+  // Populate wallet view selector (admin only)
   const viewSelect = document.getElementById('wallet-view-select');
   viewSelect.innerHTML = state.wallets.map(w =>
     `<option value="${w.id}">${w.name}</option>`
@@ -2202,20 +2204,50 @@ async function loadWallet() {
     state.currentWalletId = viewSelect.value;
     renderWalletBalances();
   };
+  viewSelect.style.display = isAdmin ? '' : 'none';
 
-  // Populate employee dropdown
-  const select = document.getElementById('topup-employee');
-  select.innerHTML = state.employees.map(e =>
-    `<option value="${e.id}">${e.name}</option>`
-  ).join('');
-
-  document.getElementById('topup-date').value = new Date().toISOString().slice(0, 10);
+  if (isAdmin) {
+    const select = document.getElementById('topup-employee');
+    select.innerHTML = state.employees.map(e =>
+      `<option value="${e.id}">${e.name}</option>`
+    ).join('');
+    document.getElementById('topup-date').value = new Date().toISOString().slice(0, 10);
+  }
 
   await renderWalletBalances();
 }
 
 async function renderWalletBalances() {
+  const isAdmin = state.currentUser && state.currentUser.is_admin;
+  const el = document.getElementById('wallet-employee-list');
+
+  if (!isAdmin) {
+    document.getElementById('wallet-list-title').textContent = '💰 我的餘額';
+    const myWallets = await api('employee_wallets', {
+      params: {
+        employee_id: `eq.${state.currentUser.id}`,
+        select: '*,wallets(name)',
+      }
+    }) || [];
+    el.innerHTML = myWallets.map((ew, i) => {
+      const wName = ew.wallets ? ew.wallets.name : '—';
+      const cls = ew.balance >= 0 ? 'positive' : 'negative';
+      return `<div class="wallet-row" data-employee-id="${ew.employee_id}" data-wallet-id="${ew.wallet_id}" style="background:${i % 2 === 0 ? '#f7f7f7' : '#ffffff'}">
+        <span class="wallet-name">${wName}</span>
+        <span class="wallet-balance ${cls}">$${ew.balance}</span>
+      </div>`;
+    }).join('') || '<p style="text-align:center;color:var(--text-secondary);padding:12px">尚無錢包資料</p>';
+    el.querySelectorAll('.wallet-row').forEach(row => {
+      row.addEventListener('click', () => {
+        state.currentWalletId = row.dataset.walletId;
+        loadWalletHistory(row.dataset.employeeId);
+      });
+    });
+    return;
+  }
+
   if (!state.currentWalletId) return;
+  document.getElementById('wallet-list-title').textContent = '👥 全員餘額總覽';
 
   const ewList = await api('employee_wallets', {
     params: {
@@ -2235,7 +2267,6 @@ async function renderWalletBalances() {
     return ai - bi;
   });
 
-  const el = document.getElementById('wallet-employee-list');
   el.innerHTML = ewList.map((ew, i) => {
     const name = ew.employees ? ew.employees.name : '—';
     const cls = ew.balance >= 0 ? 'positive' : 'negative';
@@ -2251,6 +2282,8 @@ async function renderWalletBalances() {
 }
 
 async function loadWalletHistory(employeeId) {
+  const isAdmin = state.currentUser && state.currentUser.is_admin;
+  if (!isAdmin && employeeId !== state.currentUser.id) return;
   const emp = state.employees.find(e => e.id === employeeId);
   if (!emp) return;
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>吃飽喝足點餐系統</title>
-  <link rel="stylesheet" href="style.css?v=20260903a">
+  <link rel="stylesheet" href="style.css?v=20260903b">
 </head>
 <body>
   <!-- 身份選擇遮罩 -->
@@ -202,7 +202,7 @@
 
     <!-- ========== 錢包頁 ========== -->
     <section id="view-wallet" class="view">
-      <div class="card" id="topup-card">
+      <div class="card admin-only" id="topup-card">
         <h3>💰 儲值｜手動結算</h3>
         <div class="form-group">
           <label>選擇錢包</label>
@@ -224,7 +224,7 @@
       </div>
 
       <div class="card">
-        <h3>👥 全員餘額總覽</h3>
+        <h3 id="wallet-list-title">👥 全員餘額總覽</h3>
         <div class="form-group" style="margin-bottom:8px">
           <select id="wallet-view-select" style="font-size:14px"></select>
         </div>
@@ -456,6 +456,6 @@
   <!-- Toast 通知 -->
   <div id="toast" class="toast"></div>
 
-  <script src="app.js?v=20260903a"></script>
+  <script src="app.js?v=20260903b"></script>
 </body>
 </html>
