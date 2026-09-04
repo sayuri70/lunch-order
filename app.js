@@ -36,6 +36,14 @@ const EMPLOYEE_ORDER = [
   '藹倫','孟修','奇彥','玉珍','鎵宜','孟祐','鈺筑','瑜臻',
   '雅涵','偉智','俊霆','志誠','怡均','廣浩','芮庭'
 ];
+
+const TECH_DEPT_MEMBERS = [
+  '明道部長','明春經理','坤保經理','思綺經理','冠宇','玫君','玟萱',
+  '藹倫','孟修','奇彥','玉珍','鎵宜','孟祐','鈺筑','瑜臻',
+  '雅涵','偉智','花花經理','俊霆','小綠','蕙怡經理','芮庭',
+  '嘉雯','香瑄','映嬅','志誠','怡均','天龍經理','廣浩','倩瑜',
+  '宇璇','凱強','歆珮','育儀'
+];
 function sortEmployees(list) {
   return [...list].sort((a, b) => {
     const ai = EMPLOYEE_ORDER.indexOf(a.name);
@@ -1128,8 +1136,11 @@ async function loadSummary() {
   const agg = {};
   const aggAdditional = {};
   let grandTotal = 0;
+  let techTotal = 0;
   orders.forEach(order => {
     grandTotal += order.total_amount;
+    const empName = order.employees ? order.employees.name : '';
+    if (TECH_DEPT_MEMBERS.includes(empName)) techTotal += order.total_amount;
     const target = order.is_additional ? aggAdditional : agg;
     (order.order_items || []).forEach(item => {
       const toppingNames = (item.toppings || []).map(t => t.name).sort().join('+');
@@ -1202,7 +1213,7 @@ async function loadSummary() {
   document.getElementById('summary-stats').innerHTML = `
     <span>共 ${orders.length} 人</span>
     <span>總金額 $${grandTotal}</span>
-  `;
+  ` + (techTotal > 0 ? `<div style="width:100%;text-align:right;font-size:13px;color:var(--text-secondary);margin-top:2px">（技術部 $${techTotal}）</div>` : '');
 
   // Reminder section
   const reminderSection = document.getElementById('summary-reminder-section');
@@ -2280,11 +2291,15 @@ async function loadWallet() {
 
   const isAdmin = state.currentUser && state.currentUser.is_admin;
 
-  // Populate wallet view selector (admin only)
+  // Populate wallet view selector (admin only) — include totals
+  const allEw = await api('employee_wallets', { params: { select: 'wallet_id,balance' } }) || [];
+  const walletTotals = {};
+  allEw.forEach(ew => { walletTotals[ew.wallet_id] = (walletTotals[ew.wallet_id] || 0) + ew.balance; });
   const viewSelect = document.getElementById('wallet-view-select');
-  viewSelect.innerHTML = state.wallets.map(w =>
-    `<option value="${w.id}">${w.name}</option>`
-  ).join('');
+  viewSelect.innerHTML = state.wallets.map(w => {
+    const t = walletTotals[w.id] || 0;
+    return `<option value="${w.id}">${w.name}（$${t.toLocaleString()}）</option>`;
+  }).join('');
   if (!state.currentWalletId && state.wallets.length > 0) {
     state.currentWalletId = state.wallets[0].id;
   }
@@ -2345,16 +2360,7 @@ async function renderWalletBalances() {
     }
   }) || [];
 
-  ewList.sort((a, b) => {
-    const an = a.employees ? a.employees.name : '';
-    const bn = b.employees ? b.employees.name : '';
-    const ai = EMPLOYEE_ORDER.indexOf(an);
-    const bi = EMPLOYEE_ORDER.indexOf(bn);
-    if (ai === -1 && bi === -1) return an.localeCompare(bn, 'zh-Hant');
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
-  });
+  ewList.sort((a, b) => a.balance - b.balance);
 
   el.innerHTML = ewList.map((ew, i) => {
     const name = ew.employees ? ew.employees.name : '—';
