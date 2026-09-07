@@ -1759,8 +1759,61 @@ async function openMenuManagement(restaurantId) {
   document.getElementById('new-item-sweetness').checked = isDrink;
   document.getElementById('new-item-ice').checked = isDrink;
 
+  // Show toppings section for drink shops only
+  const toppingsMgmt = document.getElementById('toppings-management');
+  if (isDrink) {
+    toppingsMgmt.style.display = '';
+    await loadMgmtToppings();
+  } else {
+    toppingsMgmt.style.display = 'none';
+  }
+
   await loadMenuItems();
 }
+
+async function loadMgmtToppings() {
+  const toppings = await api('toppings', {
+    params: { restaurant_id: `eq.${mgmtRestaurantId}`, order: 'sort_order' }
+  }) || [];
+  const el = document.getElementById('topping-list');
+  if (toppings.length === 0) {
+    el.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;padding:4px 0">尚無加料</p>';
+    return;
+  }
+  el.innerHTML = toppings.map(t =>
+    `<div class="admin-list-item">
+      <span>${t.name}　$${t.price}</span>
+      <button class="btn btn-small btn-danger" data-action="delete-topping" data-id="${t.id}" style="font-size:12px">刪除</button>
+    </div>`
+  ).join('');
+  el.querySelectorAll('[data-action="delete-topping"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('確定刪除這項加料？')) return;
+      await api(`toppings?id=eq.${btn.dataset.id}`, { method: 'DELETE' });
+      toast('已刪除');
+      loadMgmtToppings();
+    });
+  });
+}
+
+document.getElementById('add-topping-btn').addEventListener('click', async () => {
+  const name = document.getElementById('new-topping-name').value.trim();
+  const price = parseInt(document.getElementById('new-topping-price').value);
+  if (!name) return toast('請輸入加料名稱');
+  if (isNaN(price)) return toast('請輸入價格');
+  const toppings = await api('toppings', {
+    params: { restaurant_id: `eq.${mgmtRestaurantId}`, order: 'sort_order.desc', limit: '1' }
+  }) || [];
+  const nextOrder = toppings.length > 0 ? toppings[0].sort_order + 1 : 1;
+  await api('toppings', {
+    method: 'POST',
+    body: { restaurant_id: mgmtRestaurantId, name, price, sort_order: nextOrder }
+  });
+  document.getElementById('new-topping-name').value = '';
+  document.getElementById('new-topping-price').value = '';
+  toast('加料已新增');
+  loadMgmtToppings();
+});
 
 async function loadMenuItems() {
   const catId = document.getElementById('mgmt-category').value;
