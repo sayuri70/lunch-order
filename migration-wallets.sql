@@ -29,8 +29,9 @@ CREATE POLICY "allow_all" ON employee_wallets FOR ALL USING (true) WITH CHECK (t
 -- 3. order_sessions 加 wallet_id（開團時選擇扣款錢包）
 ALTER TABLE order_sessions ADD COLUMN IF NOT EXISTS wallet_id UUID REFERENCES wallets(id);
 
--- 4. wallet_transactions 加 wallet_id
+-- 4. wallet_transactions 加 wallet_id 與 notes
 ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS wallet_id UUID REFERENCES wallets(id);
+ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS notes TEXT;
 
 -- 5. 建立兩個錢包
 INSERT INTO wallets (name, sort_order) VALUES

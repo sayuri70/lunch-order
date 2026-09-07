@@ -1449,6 +1449,33 @@ async function loadHistory() {
       <span class="balance-amount">$0</span>
     `;
   }
+
+  // Wallet transaction history
+  const txs = await api('wallet_transactions', {
+    params: {
+      select: '*,wallets(name)',
+      employee_id: `eq.${state.currentUser.id}`,
+      order: 'created_at.desc',
+      limit: '30',
+    }
+  }) || [];
+  const txEl = document.getElementById('history-wallet-txs');
+  if (txs.length === 0) {
+    txEl.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:12px">尚無交易紀錄</p>';
+  } else {
+    txEl.innerHTML = txs.map(tx => {
+      const isPlus = tx.amount > 0;
+      const label = tx.type === 'topup' ? '儲值' : tx.type === 'adjustment' ? '調整' : '扣款';
+      const walletName = tx.wallets ? tx.wallets.name : '';
+      return `<div class="wallet-tx">
+        <div>
+          <div>${tx.date}　${label}${walletName ? '　' + walletName : ''}</div>
+          ${tx.notes ? `<div class="wallet-tx-info">${tx.notes}</div>` : ''}
+        </div>
+        <span class="wallet-tx-amount ${isPlus ? 'plus' : 'minus'}">${isPlus ? '+' : ''}$${tx.amount}</span>
+      </div>`;
+    }).join('');
+  }
 }
 
 document.getElementById('prev-month').addEventListener('click', () => {
