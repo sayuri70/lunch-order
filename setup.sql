@@ -510,6 +510,22 @@ INSERT INTO menu_items (restaurant_id, category_id, name, price, has_sweetness, 
 INSERT INTO menu_items (restaurant_id, category_id, name, price, has_sweetness, has_ice, sort_order, notes) VALUES
 ('a1000000-0000-0000-0000-000000000003', NULL, '椪糖脆脆', 20, FALSE, FALSE, 100, '單點小食');
 
+-- === 一沐日（飲料店）===
+INSERT INTO restaurants (id, name, type, sort_order)
+VALUES ('a1000000-0000-0000-0000-000000000004', '一沐日', 'drink', 4);
+
+INSERT INTO menu_categories (id, restaurant_id, name, sort_order) VALUES
+('c4000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000004', '牧場鮮乳', 1);
+
+-- 加料
+INSERT INTO toppings (restaurant_id, name, price, sort_order) VALUES
+('a1000000-0000-0000-0000-000000000004', '招牌粉粿', 15, 1),
+('a1000000-0000-0000-0000-000000000004', '草仔粿', 15, 2),
+('a1000000-0000-0000-0000-000000000004', '雙粉（粉粿＋粉圓）', 15, 3),
+('a1000000-0000-0000-0000-000000000004', '琥珀粉圓', 10, 4),
+('a1000000-0000-0000-0000-000000000004', '蘆薈', 15, 5),
+('a1000000-0000-0000-0000-000000000004', '嫩仙草', 10, 6);
+
 -- === 種子資料：錢包 ===
 INSERT INTO wallets (name, sort_order) VALUES
 ('技術部錢包', 1),
