@@ -58,9 +58,9 @@ function sortEmployees(list) {
 function toDirectImageUrl(url) {
   if (!url) return url;
   const match = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
-  if (match) return `https://lh3.googleusercontent.com/d/${match[1]}`;
+  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w4000`;
   const match2 = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
-  if (match2) return `https://lh3.googleusercontent.com/d/${match2[1]}`;
+  if (match2) return `https://drive.google.com/thumbnail?id=${match2[1]}&sz=w4000`;
   return url;
 }
 
@@ -1137,12 +1137,14 @@ async function loadSummary() {
   const aggAdditional = {};
   let grandTotal = 0;
   let techTotal = 0;
+  let totalPortions = 0;
   orders.forEach(order => {
     grandTotal += order.total_amount;
     const empName = order.employees ? order.employees.name : '';
     if (TECH_DEPT_MEMBERS.includes(empName)) techTotal += order.total_amount;
     const target = order.is_additional ? aggAdditional : agg;
     (order.order_items || []).forEach(item => {
+      totalPortions += (item.quantity || 1);
       const toppingNames = (item.toppings || []).map(t => t.name).sort().join('+');
       const key = `${item.item_name}|${item.size_name || ''}|${item.item_type}|${item.sweetness || ''}|${item.ice || ''}|${toppingNames}|${item.notes || ''}`;
       if (!target[key]) {
@@ -1211,7 +1213,7 @@ async function loadSummary() {
 
   document.getElementById('summary-content').innerHTML = html;
   document.getElementById('summary-stats').innerHTML = `
-    <span>共 ${orders.length} 人</span>
+    <span>共 ${orders.length} 人（${totalPortions} 份）</span>
     <span>總金額 $${grandTotal}</span>
   ` + (techTotal > 0 ? `<div style="width:100%;text-align:right;font-size:13px;color:var(--text-secondary);margin-top:2px">（技術部 $${techTotal}）</div>` : '');
 
