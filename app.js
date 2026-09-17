@@ -9,7 +9,7 @@ const SWEETNESS_OPTIONS = ['全糖', '七分糖', '五分糖', '三分糖', '一
 const ICE_OPTIONS = ['正常冰', '少冰', '微冰', '去冰', '溫飲', '熱飲'];
 
 const MEAL_CATEGORIES = [
-  { label: '便當', names: ['鳳翔燒臘','龍恩焢肉飯','椒麻雞便當','合珍屋食坊','梁社漢排骨','徐家雞腿飯','南部灶咖','秦記排骨','阿嬤古早味','池上飯包','成大器烤肉飯','三哥','十金鵝'] },
+  { label: '便當', names: ['鳳翔燒臘','龍恩焢肉飯','椒麻雞便當','合珍屋食坊','梁社漢排骨','徐家雞腿飯','南部灶咖','秦記排骨','阿嬤古早味','池上飯包','成大器烤肉飯','三哥','十金鵝','享好食'] },
   { label: '丼飯', names: ['路邊野雞','簡單吃碗飯','黃燜雞米飯','鮑汁燜雞米飯','相家。雞','惠香嘉義火雞肉飯'] },
   { label: '麵食', names: ['溢煌排骨酥麵','楠涵風味餐','新北市老黃牛雜','央二巷','西螺鴨膳師','花山家','兩支北方麵食館','上和魚刺肉羹','三舅媽的店','三九餃子館'] },
   { label: '火鍋', names: ['巧媽臭臭鍋'] },
@@ -1498,7 +1498,7 @@ async function loadAdmin() {
     await loadWallets();
     renderAdminRestaurants();
     renderAdminEmployees();
-    renderAdminWalletSelect();
+    renderSettleWalletSelect();
     await loadAdminSession();
   } catch (err) {
     console.error('loadAdmin error:', err);
@@ -1506,8 +1506,8 @@ async function loadAdmin() {
   }
 }
 
-function renderAdminWalletSelect() {
-  const el = document.getElementById('admin-wallet');
+function renderSettleWalletSelect() {
+  const el = document.getElementById('settle-wallet-select');
   el.innerHTML = state.wallets.map(w =>
     `<option value="${w.id}">${w.name}</option>`
   ).join('');
@@ -2083,7 +2083,7 @@ async function loadAdminSession() {
     return `<div class="admin-session-item">
       <div class="admin-session-info">
         <div class="as-title">${[mealRest ? mealRest.name : null, drinkRest ? drinkRest.name : null].filter(Boolean).join(' + ') || '—'}</div>
-        <div class="as-meta">${formatSessionDate(s.date)}${s.deadline ? '　截止 ' + s.deadline.slice(0, 5) : ''}　開團人：${creator}${s.wallets ? '　💰' + s.wallets.name : ''}</div>
+        <div class="as-meta">${formatSessionDate(s.date)}${s.deadline ? '　截止 ' + s.deadline.slice(0, 5) : ''}　開團人：${creator}${s.is_settled && s.wallets ? '　💰' + s.wallets.name : ''}</div>
       </div>
       <div class="item-actions">
         <span class="session-card-badge ${isOpen ? 'open' : s.is_settled ? 'settled' : 'closed'}">${isOpen ? '進行中' : s.is_settled ? '已結帳' : '已截止'}</span>
@@ -2120,67 +2120,83 @@ async function loadAdminSession() {
   el.querySelectorAll('[data-action="settle-session"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const sessionId = btn.dataset.id;
-      const session = sessions.find(s => s.id === sessionId);
-      const walletId = session ? session.wallet_id : null;
-      const walletName = session && session.wallets ? session.wallets.name : '未指定錢包';
 
-      if (!walletId) {
-        toast('此團未設定扣款錢包，無法結帳');
+      const orders = await api('orders', {
+        params: { session_id: `eq.${sessionId}`, select: 'id,employee_id,total_amount' }
+      });
+
+      if (!orders || orders.length === 0) {
+        toast('此團沒有訂單');
         return;
       }
 
-      if (!confirm(`確定要結帳嗎？將從「${walletName}」扣除每位員工的訂單金額。`)) return;
+      const totalAmount = orders.reduce((sum, o) => sum + o.total_amount, 0);
 
-      try {
-        const orders = await api('orders', {
-          params: { session_id: `eq.${sessionId}`, select: 'id,employee_id,total_amount' }
-        });
+      renderSettleWalletSelect();
+      document.getElementById('settle-wallet-summary').textContent =
+        `共 ${orders.length} 筆訂單，總金額 $${totalAmount}`;
 
-        if (!orders || orders.length === 0) {
-          toast('此團沒有訂單');
-          return;
-        }
+      const modal = document.getElementById('settle-wallet-modal');
+      modal.style.display = 'flex';
 
-        for (const order of orders) {
-          const emp = state.employees.find(e => e.id === order.employee_id);
-          if (!emp) continue;
+      const confirmBtn = document.getElementById('settle-wallet-confirm');
+      const cancelBtn = document.getElementById('settle-wallet-cancel');
 
-          const ewRows = await api('employee_wallets', {
-            params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' }
-          });
-          const ew = ewRows && ewRows[0];
-          if (!ew) continue;
+      const cleanup = () => {
+        modal.style.display = 'none';
+        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+      };
 
-          const newBalance = ew.balance - order.total_amount;
-          await api(`employee_wallets?id=eq.${ew.id}`, {
+      document.getElementById('settle-wallet-cancel').addEventListener('click', cleanup);
+
+      document.getElementById('settle-wallet-confirm').addEventListener('click', async () => {
+        const walletId = document.getElementById('settle-wallet-select').value;
+        const walletName = state.wallets.find(w => w.id === walletId)?.name || '未知錢包';
+        cleanup();
+
+        try {
+          for (const order of orders) {
+            const emp = state.employees.find(e => e.id === order.employee_id);
+            if (!emp) continue;
+
+            const ewRows = await api('employee_wallets', {
+              params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' }
+            });
+            const ew = ewRows && ewRows[0];
+            if (!ew) continue;
+
+            const newBalance = ew.balance - order.total_amount;
+            await api(`employee_wallets?id=eq.${ew.id}`, {
+              method: 'PATCH',
+              body: { balance: newBalance },
+            });
+
+            await api('wallet_transactions', {
+              method: 'POST',
+              body: {
+                employee_id: emp.id,
+                wallet_id: walletId,
+                amount: -order.total_amount,
+                type: 'deduct',
+                date: new Date().toISOString().slice(0, 10),
+                notes: `訂單扣款（${walletName}）`,
+                created_by: state.currentUser.id,
+              }
+            });
+          }
+
+          await api(`order_sessions?id=eq.${sessionId}`, {
             method: 'PATCH',
-            body: { balance: newBalance },
+            body: { is_settled: true, wallet_id: walletId }
           });
 
-          await api('wallet_transactions', {
-            method: 'POST',
-            body: {
-              employee_id: emp.id,
-              wallet_id: walletId,
-              amount: -order.total_amount,
-              type: 'deduct',
-              date: new Date().toISOString().slice(0, 10),
-              notes: `訂單扣款（${walletName}）`,
-              created_by: state.currentUser.id,
-            }
-          });
+          toast(`結帳完成！共 ${orders.length} 筆訂單，從「${walletName}」扣款`);
+          loadAdminSession();
+        } catch (err) {
+          toast('結帳失敗：' + err.message);
         }
-
-        await api(`order_sessions?id=eq.${sessionId}`, {
-          method: 'PATCH',
-          body: { is_settled: true }
-        });
-
-        toast(`結帳完成！共 ${orders.length} 筆訂單，從「${walletName}」扣款`);
-        loadAdminSession();
-      } catch (err) {
-        toast('結帳失敗：' + err.message);
-      }
+      });
     });
   });
 
@@ -2214,7 +2230,6 @@ document.getElementById('open-session-btn').addEventListener('click', async () =
   const date = document.getElementById('admin-session-date').value;
   const deadline = document.getElementById('admin-deadline').value || null;
   const notes = document.getElementById('admin-notes').value.trim() || null;
-  const walletId = document.getElementById('admin-wallet').value || null;
 
   try {
     await api('order_sessions', {
@@ -2225,7 +2240,6 @@ document.getElementById('open-session-btn').addEventListener('click', async () =
         drink_restaurant_id: drinkId,
         deadline,
         notes,
-        wallet_id: walletId,
         created_by: state.currentUser ? state.currentUser.id : null,
       }
     });

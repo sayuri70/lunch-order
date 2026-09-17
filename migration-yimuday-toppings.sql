@@ -1,15 +1,11 @@
 -- 新增一沐日加料選項
+-- 一沐日 restaurant_id: 6a0d79d3-e924-4007-8254-c02d29451c37
 -- 在 Supabase SQL Editor 執行此檔案
 
-INSERT INTO toppings (restaurant_id, name, price, sort_order)
-SELECT id, '招牌粉粿', 15, 1 FROM restaurants WHERE name = '一沐日'
-UNION ALL
-SELECT id, '草仔粿', 15, 2 FROM restaurants WHERE name = '一沐日'
-UNION ALL
-SELECT id, '雙粉（粉粿＋粉圓）', 15, 3 FROM restaurants WHERE name = '一沐日'
-UNION ALL
-SELECT id, '琥珀粉圓', 10, 4 FROM restaurants WHERE name = '一沐日'
-UNION ALL
-SELECT id, '蘆薈', 15, 5 FROM restaurants WHERE name = '一沐日'
-UNION ALL
-SELECT id, '嫩仙草', 10, 6 FROM restaurants WHERE name = '一沐日';
+INSERT INTO toppings (restaurant_id, name, price, sort_order) VALUES
+('6a0d79d3-e924-4007-8254-c02d29451c37', '招牌粉粿', 15, 1),
+('6a0d79d3-e924-4007-8254-c02d29451c37', '草仔粿', 15, 2),
+('6a0d79d3-e924-4007-8254-c02d29451c37', '雙粉（粉粿＋粉圓）', 15, 3),
+('6a0d79d3-e924-4007-8254-c02d29451c37', '琥珀粉圓', 10, 4),
+('6a0d79d3-e924-4007-8254-c02d29451c37', '蘆薈', 15, 5),
+('6a0d79d3-e924-4007-8254-c02d29451c37', '嫩仙草', 10, 6);

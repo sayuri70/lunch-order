@@ -297,10 +297,6 @@
           </div>
         </div>
         <div class="form-group">
-          <label>扣款錢包</label>
-          <select id="admin-wallet"></select>
-        </div>
-        <div class="form-group">
           <label>備註</label>
           <input type="text" id="admin-notes" placeholder="例：今日滿500免運">
         </div>
@@ -481,6 +477,22 @@
       <div class="modal-actions">
         <button id="rest-cancel" class="btn btn-secondary">取消</button>
         <button id="rest-save" class="btn btn-primary">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 結帳錢包選擇 Modal -->
+  <div id="settle-wallet-modal" class="modal" style="display:none">
+    <div class="modal-content modal-small">
+      <h3>💰 選擇扣款錢包</h3>
+      <div class="form-group">
+        <label>從哪個錢包扣款？</label>
+        <select id="settle-wallet-select"></select>
+      </div>
+      <p id="settle-wallet-summary" style="color:var(--text-secondary);font-size:13px;margin-bottom:12px"></p>
+      <div class="modal-actions">
+        <button id="settle-wallet-cancel" class="btn btn-secondary">取消</button>
+        <button id="settle-wallet-confirm" class="btn btn-primary">確定結帳</button>
       </div>
     </div>
   </div>
