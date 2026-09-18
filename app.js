@@ -1408,8 +1408,6 @@ function openEditItemModal(item, orderId) {
   document.getElementById('edit-item-title').textContent = title;
   document.getElementById('edit-item-qty').value = item.quantity || 1;
   document.getElementById('edit-item-notes').value = item.notes || '';
-  document.getElementById('edit-item-price').value = item.base_price;
-
   const isDrink = item.item_type === 'drink';
   const drinkOpts = document.getElementById('edit-item-drink-options');
   drinkOpts.style.display = isDrink ? '' : 'none';
@@ -1433,14 +1431,10 @@ function openEditItemModal(item, orderId) {
   document.getElementById('edit-item-save').addEventListener('click', async () => {
     const qty = parseInt(document.getElementById('edit-item-qty').value) || 1;
     const notes = document.getElementById('edit-item-notes').value.trim() || null;
-    const basePrice = parseInt(document.getElementById('edit-item-price').value);
-    if (isNaN(basePrice)) { toast('請輸入正確價格'); return; }
-
     const body = {
       quantity: qty,
       notes,
-      base_price: basePrice,
-      total_price: (basePrice + (item.toppings_price || 0)) * qty,
+      total_price: (item.base_price + (item.toppings_price || 0)) * qty,
     };
     if (isDrink) {
       body.sweetness = document.getElementById('edit-item-sweetness').value;
