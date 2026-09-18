@@ -513,6 +513,14 @@ main { max-width: 600px; margin: 0 auto; padding: 12px; }
   font-weight: 600;
   color: var(--primary);
   white-space: nowrap;
+  text-align: right;
+}
+.history-day.unsettled { opacity: 0.45; }
+.unsettled-tag {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 
 /* Balance */

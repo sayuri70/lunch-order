@@ -1378,7 +1378,7 @@ async function loadHistory() {
 
   const orders = await api('orders', {
     params: {
-      select: '*,order_sessions(date,meal_restaurant_id),order_items(*)',
+      select: '*,order_sessions(date,meal_restaurant_id,is_settled),order_items(*)',
       employee_id: `eq.${state.currentUser.id}`,
       'order_sessions.date': `gte.${startDate}`,
       order: 'created_at.desc',
@@ -1414,6 +1414,7 @@ async function loadHistory() {
   } else {
     document.getElementById('history-list').innerHTML = filtered.map(order => {
       const date = order.order_sessions.date;
+      const settled = order.order_sessions.is_settled === true;
       const restId = order.order_sessions.meal_restaurant_id;
       const rest = state.restaurants.find(r => r.id === restId);
       const items = (order.order_items || []).map(i => {
@@ -1421,13 +1422,13 @@ async function loadHistory() {
         if (i.size_name) name += `(${i.size_name})`;
         return name;
       }).join('、');
-      return `<div class="history-day">
+      return `<div class="history-day${settled ? '' : ' unsettled'}">
         <div>
           <div class="history-day-date">${date.slice(5)}</div>
           <div class="history-day-restaurant">${rest ? rest.name : ''}</div>
         </div>
         <div class="history-day-items">${items}</div>
-        <div class="history-day-amount">$${order.total_amount}</div>
+        <div class="history-day-amount">$${order.total_amount}${settled ? '' : '<span class="unsettled-tag">未出帳</span>'}</div>
       </div>`;
     }).join('');
   }
