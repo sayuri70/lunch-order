@@ -1104,6 +1104,73 @@ async function submitOrder() {
   }
 }
 
+// ---- Sync unsettled order prices ----
+async function syncUnsettledPrices(menuItemId, updatedBody) {
+  const hasNewPrice = updatedBody.price !== undefined;
+  const hasNewSizes = updatedBody.sizes !== undefined;
+  if (!hasNewPrice && !hasNewSizes) return;
+
+  const affectedItems = await api('order_items', {
+    params: {
+      select: 'id,order_id,size_name,quantity,toppings_price',
+      menu_item_id: `eq.${menuItemId}`,
+    }
+  }) || [];
+  if (affectedItems.length === 0) return;
+
+  const orderIds = [...new Set(affectedItems.map(i => i.order_id))];
+  const orders = await api('orders', {
+    params: {
+      select: 'id,session_id',
+      id: `in.(${orderIds.join(',')})`,
+    }
+  }) || [];
+  const sessionIds = [...new Set(orders.map(o => o.session_id))];
+  const sessions = await api('order_sessions', {
+    params: {
+      select: 'id,is_settled',
+      id: `in.(${sessionIds.join(',')})`,
+    }
+  }) || [];
+
+  const unsettledSessionIds = new Set(sessions.filter(s => s.is_settled !== true).map(s => s.id));
+  const unsettledOrderIds = new Set(orders.filter(o => unsettledSessionIds.has(o.session_id)).map(o => o.id));
+  const itemsToUpdate = affectedItems.filter(i => unsettledOrderIds.has(i.order_id));
+  if (itemsToUpdate.length === 0) return;
+
+  const sizePriceMap = {};
+  if (hasNewSizes) updatedBody.sizes.forEach(s => { sizePriceMap[s.name] = s.price; });
+
+  const touchedOrderIds = new Set();
+  for (const item of itemsToUpdate) {
+    let newBasePrice;
+    if (hasNewPrice) {
+      newBasePrice = updatedBody.price;
+    } else if (hasNewSizes && item.size_name && sizePriceMap[item.size_name] !== undefined) {
+      newBasePrice = sizePriceMap[item.size_name];
+    } else {
+      continue;
+    }
+    const newTotalPrice = (newBasePrice + (item.toppings_price || 0)) * (item.quantity || 1);
+    await api(`order_items?id=eq.${item.id}`, {
+      method: 'PATCH',
+      body: { base_price: newBasePrice, total_price: newTotalPrice },
+    });
+    touchedOrderIds.add(item.order_id);
+  }
+
+  for (const orderId of touchedOrderIds) {
+    const remaining = await api('order_items', {
+      params: { order_id: `eq.${orderId}`, select: 'total_price' }
+    }) || [];
+    const newTotal = remaining.reduce((s, i) => s + i.total_price, 0);
+    await api(`orders?id=eq.${orderId}`, {
+      method: 'PATCH',
+      body: { total_amount: newTotal },
+    });
+  }
+}
+
 // ---- Summary View ----
 async function loadSummary() {
   if (!state.currentSession) {
@@ -1247,8 +1314,9 @@ async function loadSummary() {
       if (item.quantity > 1) desc += ` ×${item.quantity}`;
       if (item.notes) desc += ` 【${item.notes}】`;
       desc += ` $${item.total_price}`;
-      const deleteBtn = canEdit ? ` <button class="btn-icon summary-delete-item" data-item-id="${item.id}" data-order-id="${order.id}" title="刪除此品項" style="color:var(--danger);font-size:12px;padding:0 4px">✕</button>` : '';
-      return `<div style="display:flex;align-items:center;justify-content:space-between">${desc}${deleteBtn}</div>`;
+      const editBtn = canEdit ? ` <button class="btn-icon summary-edit-item" data-item-id="${item.id}" data-order-id="${order.id}" title="編輯此品項" style="color:var(--primary);font-size:12px;padding:0 4px">✎</button>` : '';
+      const deleteBtn = canEdit ? `<button class="btn-icon summary-delete-item" data-item-id="${item.id}" data-order-id="${order.id}" title="刪除此品項" style="color:var(--danger);font-size:12px;padding:0 4px">✕</button>` : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between"><span>${desc}</span><span style="white-space:nowrap">${editBtn}${deleteBtn}</span></div>`;
     }).join('');
     const addLabel = order.is_additional ? '<span style="color:var(--danger);font-weight:700;font-size:12px">追加 </span>' : '';
     const orderActions = canEdit ? `<div style="display:flex;gap:6px;margin-top:6px">
@@ -1290,6 +1358,17 @@ async function loadSummary() {
       });
     });
 
+    document.querySelectorAll('.summary-edit-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const itemId = btn.dataset.itemId;
+        const orderId = btn.dataset.orderId;
+        const order = orders.find(o => o.id === orderId);
+        const item = order && (order.order_items || []).find(i => i.id === itemId);
+        if (!item) return;
+        openEditItemModal(item, orderId);
+      });
+    });
+
     document.querySelectorAll('.summary-delete-order').forEach(btn => {
       btn.addEventListener('click', async () => {
         const orderId = btn.dataset.orderId;
@@ -1319,6 +1398,72 @@ async function loadSummary() {
       });
     });
   }
+}
+
+// ---- Edit single item modal ----
+function openEditItemModal(item, orderId) {
+  const modal = document.getElementById('edit-item-modal');
+  let title = item.item_name;
+  if (item.size_name) title += `（${item.size_name}）`;
+  document.getElementById('edit-item-title').textContent = title;
+  document.getElementById('edit-item-qty').value = item.quantity || 1;
+  document.getElementById('edit-item-notes').value = item.notes || '';
+  document.getElementById('edit-item-price').value = item.base_price;
+
+  const isDrink = item.item_type === 'drink';
+  const drinkOpts = document.getElementById('edit-item-drink-options');
+  drinkOpts.style.display = isDrink ? '' : 'none';
+  if (isDrink) {
+    const sEl = document.getElementById('edit-item-sweetness');
+    sEl.innerHTML = SWEETNESS_OPTIONS.map(o => `<option value="${o}"${o === item.sweetness ? ' selected' : ''}>${o}</option>`).join('');
+    const iEl = document.getElementById('edit-item-ice');
+    iEl.innerHTML = ICE_OPTIONS.map(o => `<option value="${o}"${o === item.ice ? ' selected' : ''}>${o}</option>`).join('');
+  }
+
+  modal.style.display = 'flex';
+
+  const saveBtn = document.getElementById('edit-item-save');
+  const cancelBtn = document.getElementById('edit-item-cancel');
+  const cleanup = () => {
+    modal.style.display = 'none';
+    saveBtn.replaceWith(saveBtn.cloneNode(true));
+    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+  };
+  document.getElementById('edit-item-cancel').addEventListener('click', cleanup);
+  document.getElementById('edit-item-save').addEventListener('click', async () => {
+    const qty = parseInt(document.getElementById('edit-item-qty').value) || 1;
+    const notes = document.getElementById('edit-item-notes').value.trim() || null;
+    const basePrice = parseInt(document.getElementById('edit-item-price').value);
+    if (isNaN(basePrice)) { toast('請輸入正確價格'); return; }
+
+    const body = {
+      quantity: qty,
+      notes,
+      base_price: basePrice,
+      total_price: (basePrice + (item.toppings_price || 0)) * qty,
+    };
+    if (isDrink) {
+      body.sweetness = document.getElementById('edit-item-sweetness').value;
+      body.ice = document.getElementById('edit-item-ice').value;
+    }
+
+    cleanup();
+    try {
+      await api(`order_items?id=eq.${item.id}`, { method: 'PATCH', body });
+      const remaining = await api('order_items', {
+        params: { order_id: `eq.${orderId}`, select: 'total_price' }
+      }) || [];
+      const newTotal = remaining.reduce((s, i) => s + i.total_price, 0);
+      await api(`orders?id=eq.${orderId}`, {
+        method: 'PATCH',
+        body: { total_amount: newTotal },
+      });
+      toast('品項已更新');
+      loadSummary();
+    } catch (err) {
+      toast('更新失敗：' + err.message);
+    }
+  });
 }
 
 // Cancel admin edit
@@ -2109,6 +2254,7 @@ async function loadMenuItems() {
       }
 
       await api(`menu_items?id=eq.${id}`, { method: 'PATCH', body });
+      await syncUnsettledPrices(id, body);
       toast('已更新');
       loadMenuItems();
     });

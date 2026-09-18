@@ -499,6 +499,41 @@
     </div>
   </div>
 
+  <!-- 品項編輯 Modal -->
+  <div id="edit-item-modal" class="modal" style="display:none">
+    <div class="modal-content modal-small">
+      <h3 id="edit-item-title">編輯品項</h3>
+      <div class="form-group">
+        <label>數量</label>
+        <input type="number" id="edit-item-qty" min="1" value="1" style="width:80px">
+      </div>
+      <div id="edit-item-drink-options" style="display:none">
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label>甜度</label>
+            <select id="edit-item-sweetness"></select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>冰塊</label>
+            <select id="edit-item-ice"></select>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <input type="text" id="edit-item-notes" placeholder="例：不要香菜">
+      </div>
+      <div class="form-group">
+        <label>單價（修正用）</label>
+        <input type="number" id="edit-item-price" min="0" style="width:100px">
+      </div>
+      <div class="modal-actions">
+        <button id="edit-item-cancel" class="btn btn-secondary">取消</button>
+        <button id="edit-item-save" class="btn btn-primary">儲存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 結帳錢包選擇 Modal -->
   <div id="settle-wallet-modal" class="modal" style="display:none">
     <div class="modal-content modal-small">
