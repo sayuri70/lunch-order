@@ -2047,15 +2047,23 @@ async function loadAdminSession() {
     dateSelect.innerHTML += `<option value="${val}">${label}</option>`;
   }
 
-  // Load all upcoming sessions
   const today = new Date().toISOString().slice(0, 10);
-  const sessions = await api('order_sessions', {
+  const upcoming = await api('order_sessions', {
     params: {
       select: '*,employees!order_sessions_created_by_fkey(name),wallets(name)',
       date: `gte.${today}`,
       order: 'date,created_at',
     }
-  });
+  }) || [];
+  const unsettledPast = await api('order_sessions', {
+    params: {
+      select: '*,employees!order_sessions_created_by_fkey(name),wallets(name)',
+      date: `lt.${today}`,
+      is_settled: 'neq.true',
+      order: 'date,created_at',
+    }
+  }) || [];
+  const sessions = [...unsettledPast, ...upcoming];
 
   const el = document.getElementById('admin-sessions-list');
   if (!sessions || sessions.length === 0) {
