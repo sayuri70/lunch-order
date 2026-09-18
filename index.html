@@ -194,6 +194,24 @@
         <h3>👥 個人訂單明細</h3>
         <div id="summary-detail"></div>
       </div>
+
+      <div class="card admin-only">
+        <div class="history-header">
+          <h3>📅 歷史訂單查詢</h3>
+          <div class="month-picker">
+            <button id="cal-prev-month" class="btn-icon">&lt;</button>
+            <span id="cal-month-label"></span>
+            <button id="cal-next-month" class="btn-icon">&gt;</button>
+          </div>
+        </div>
+        <div id="order-calendar" class="order-calendar"></div>
+        <div id="cal-detail" style="display:none">
+          <div id="cal-detail-date" class="summary-date" style="margin-top:12px"></div>
+          <div id="cal-detail-content" class="summary-content"></div>
+          <div id="cal-detail-stats" class="summary-stats"></div>
+          <div id="cal-detail-persons"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ========== 紀錄頁 ========== -->

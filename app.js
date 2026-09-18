@@ -156,7 +156,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       state.existingOrder = state.pendingDeleteOrder;
       state.pendingDeleteOrder = null;
     }
-    if (view === 'summary') loadSummary();
+    if (view === 'summary') { loadSummary(); if (state.currentUser && state.currentUser.is_admin) loadOrderCalendar(); }
     if (view === 'history') loadHistory();
     if (view === 'wallet') loadWallet();
     if (view === 'admin') loadAdmin();
@@ -1362,6 +1362,175 @@ document.getElementById('clear-reminder-btn').addEventListener('click', async ()
   mealRest.reminder = null;
   toast('提醒已清除');
   loadSummary();
+});
+
+// ---- Order Calendar (歷史訂單查詢) ----
+state.calYear = new Date().getFullYear();
+state.calMonth = new Date().getMonth() + 1;
+
+async function loadOrderCalendar() {
+  const y = state.calYear;
+  const m = String(state.calMonth).padStart(2, '0');
+  document.getElementById('cal-month-label').textContent = `${y}/${m}`;
+
+  const startDate = `${y}-${m}-01`;
+  const endMonth = state.calMonth === 12 ? 1 : state.calMonth + 1;
+  const endYear = state.calMonth === 12 ? y + 1 : y;
+  const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
+
+  const sessions = (await api('order_sessions', {
+    params: {
+      select: 'id,date,meal_restaurant_id,drink_restaurant_id,is_settled',
+      date: `gte.${startDate}`,
+      order: 'date',
+    }
+  }) || []).filter(s => s.date < endDate);
+
+  // Build set of dates that have orders
+  const dateMap = {};
+  sessions.forEach(s => {
+    if (!dateMap[s.date]) dateMap[s.date] = [];
+    dateMap[s.date].push(s);
+  });
+
+  const firstDay = new Date(y, state.calMonth - 1, 1).getDay();
+  const daysInMonth = new Date(y, state.calMonth, 0).getDate();
+  const WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+  let html = WEEKDAYS.map(d => `<div class="cal-header">${d}</div>`).join('');
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${y}-${m}-${String(d).padStart(2, '0')}`;
+    const has = dateMap[dateStr];
+    html += `<div class="cal-day${has ? ' has-order' : ''}" data-date="${dateStr}">${d}${has ? '<span class="cal-dot"></span>' : ''}</div>`;
+  }
+
+  document.getElementById('order-calendar').innerHTML = html;
+  document.getElementById('cal-detail').style.display = 'none';
+
+  document.querySelectorAll('.cal-day.has-order').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.cal-day.selected').forEach(s => s.classList.remove('selected'));
+      el.classList.add('selected');
+      loadCalendarDetail(el.dataset.date, dateMap[el.dataset.date]);
+    });
+  });
+}
+
+async function loadCalendarDetail(date, daySessions) {
+  const detail = document.getElementById('cal-detail');
+  detail.style.display = '';
+
+  const restNames = daySessions.map(s => {
+    const m = state.restaurants.find(r => r.id === s.meal_restaurant_id);
+    const d = state.restaurants.find(r => r.id === s.drink_restaurant_id);
+    return [m, d].filter(Boolean).map(r => r.name).join(' + ');
+  }).join('、');
+
+  const settled = daySessions.every(s => s.is_settled === true);
+  document.getElementById('cal-detail-date').innerHTML =
+    `${date}　${restNames}${settled ? '' : '　<span style="font-size:12px;color:var(--text-secondary)">未出帳</span>'}`;
+
+  const sessionIds = daySessions.map(s => s.id);
+  const orders = await api('orders', {
+    params: {
+      select: '*,employees(name),order_items(*)',
+      session_id: `in.(${sessionIds.join(',')})`,
+    }
+  }) || [];
+
+  if (orders.length === 0) {
+    document.getElementById('cal-detail-content').innerHTML = '<p class="empty-state">此日無訂單</p>';
+    document.getElementById('cal-detail-stats').innerHTML = '';
+    document.getElementById('cal-detail-persons').innerHTML = '';
+    return;
+  }
+
+  // Aggregate items
+  const agg = {};
+  let grandTotal = 0;
+  let techTotal = 0;
+  let totalPortions = 0;
+  orders.forEach(order => {
+    grandTotal += order.total_amount;
+    const empName = order.employees ? order.employees.name : '';
+    if (TECH_DEPT_MEMBERS.includes(empName)) techTotal += order.total_amount;
+    (order.order_items || []).forEach(item => {
+      totalPortions += (item.quantity || 1);
+      const toppingNames = (item.toppings || []).map(t => t.name).sort().join('+');
+      const key = `${item.item_name}|${item.size_name || ''}|${item.item_type}|${item.sweetness || ''}|${item.ice || ''}|${toppingNames}`;
+      if (!agg[key]) {
+        agg[key] = { name: item.item_name, size: item.size_name, type: item.item_type, sweetness: item.sweetness, ice: item.ice, toppings: item.toppings || [], count: 0 };
+      }
+      agg[key].count += item.quantity;
+    });
+  });
+
+  const groups = { meal: '正餐', drink: '飲料' };
+  const byType = {};
+  Object.values(agg).forEach(item => {
+    const t = item.type || 'meal';
+    if (!byType[t]) byType[t] = [];
+    byType[t].push(item);
+  });
+
+  let html = '';
+  for (const [type, label] of Object.entries(groups)) {
+    const items = byType[type];
+    if (!items || items.length === 0) continue;
+    items.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    html += `<div class="summary-group"><div class="summary-group-title">【${label}】</div>`;
+    items.forEach(item => {
+      let line = `・${item.name}`;
+      if (item.size) line += `（${item.size}）`;
+      if (item.sweetness) line += ` ${item.sweetness}`;
+      if (item.ice) line += ` ${item.ice}`;
+      if (item.toppings.length) line += ` +${item.toppings.map(t => t.name).join('+')}`;
+      line += ` ×${item.count}`;
+      html += `<div class="summary-item">${line}</div>`;
+    });
+    html += '</div>';
+  }
+
+  document.getElementById('cal-detail-content').innerHTML = html;
+  document.getElementById('cal-detail-stats').innerHTML = `
+    <span>共 ${orders.length} 人（${totalPortions} 份）</span>
+    <span>總金額 $${grandTotal}</span>
+  ` + (techTotal > 0 ? `<div style="width:100%;text-align:right;font-size:13px;color:var(--text-secondary);margin-top:2px">（技術部 $${techTotal}）</div>` : '');
+
+  // Per-person detail
+  const sorted = sortEmployees(orders.map(o => ({ ...o, name: o.employees ? o.employees.name : '未知' })));
+  document.getElementById('cal-detail-persons').innerHTML = sorted.map(order => {
+    const name = order.name;
+    const itemsHtml = (order.order_items || []).map(item => {
+      let desc = `・${item.item_name}`;
+      if (item.size_name) desc += `(${item.size_name})`;
+      if (item.sweetness) desc += ` ${item.sweetness}`;
+      if (item.ice) desc += ` ${item.ice}`;
+      const tops = item.toppings || [];
+      if (tops.length) desc += ` +${tops.map(t => t.name).join('+')}`;
+      if (item.quantity > 1) desc += ` ×${item.quantity}`;
+      if (item.notes) desc += ` 【${item.notes}】`;
+      desc += ` $${item.total_price}`;
+      return `<div>${desc}</div>`;
+    }).join('');
+    return `<div class="summary-detail-person">
+      <div class="person-name">${name}</div>
+      <div class="person-items">${itemsHtml}</div>
+      <div class="person-total">$${order.total_amount}</div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('cal-prev-month').addEventListener('click', () => {
+  state.calMonth--;
+  if (state.calMonth < 1) { state.calMonth = 12; state.calYear--; }
+  loadOrderCalendar();
+});
+document.getElementById('cal-next-month').addEventListener('click', () => {
+  state.calMonth++;
+  if (state.calMonth > 12) { state.calMonth = 1; state.calYear++; }
+  loadOrderCalendar();
 });
 
 // ---- History View ----

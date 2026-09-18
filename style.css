@@ -523,6 +523,28 @@ main { max-width: 600px; margin: 0 auto; padding: 12px; }
   color: var(--text-secondary);
 }
 
+/* Order Calendar */
+.order-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+  font-size: 13px;
+}
+.cal-header { font-weight: 600; color: var(--text-secondary); padding: 6px 0; font-size: 12px; }
+.cal-day {
+  padding: 8px 0;
+  border-radius: 8px;
+  cursor: default;
+  position: relative;
+}
+.cal-day.has-order { cursor: pointer; font-weight: 600; background: #fff3e0; color: var(--primary); }
+.cal-day.has-order:hover { background: #ffe0b2; }
+.cal-day.selected { background: var(--primary) !important; color: #fff !important; }
+.cal-day.empty { visibility: hidden; }
+.cal-dot { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--primary); margin: 2px auto 0; }
+.cal-day.selected .cal-dot { background: #fff; }
+
 /* Balance */
 #balance-info {
   display: flex;
