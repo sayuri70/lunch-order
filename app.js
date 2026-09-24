@@ -2472,7 +2472,12 @@ async function loadAdminSession() {
       document.getElementById('settle-wallet-confirm').addEventListener('click', async () => {
         const walletId = document.getElementById('settle-wallet-select').value;
         const walletName = state.wallets.find(w => w.id === walletId)?.name || '未知錢包';
-        cleanup();
+
+        const confirmBtn = document.getElementById('settle-wallet-confirm');
+        const cancelBtn = document.getElementById('settle-wallet-cancel');
+        confirmBtn.disabled = true;
+        cancelBtn.disabled = true;
+        confirmBtn.textContent = '結帳中，請勿重複點擊…';
 
         try {
           for (const order of orders) {
@@ -2510,9 +2515,14 @@ async function loadAdminSession() {
             body: { is_settled: true, wallet_id: walletId }
           });
 
+          cleanup();
           toast(`結帳完成！共 ${orders.length} 筆訂單，從「${walletName}」扣款`);
           loadAdminSession();
         } catch (err) {
+          const confirmBtn2 = document.getElementById('settle-wallet-confirm');
+          const cancelBtn2 = document.getElementById('settle-wallet-cancel');
+          if (confirmBtn2) { confirmBtn2.disabled = false; confirmBtn2.textContent = '確定結帳'; }
+          if (cancelBtn2) cancelBtn2.disabled = false;
           toast('結帳失敗：' + err.message);
         }
       });
