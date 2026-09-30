@@ -2480,15 +2480,15 @@ async function loadAdminSession() {
         confirmBtn.textContent = '結帳中，請勿重複點擊…';
 
         try {
-          for (const order of orders) {
+          await Promise.all(orders.map(async (order) => {
             const emp = state.employees.find(e => e.id === order.employee_id);
-            if (!emp) continue;
+            if (!emp) return;
 
             const ewRows = await api('employee_wallets', {
               params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' }
             });
             const ew = ewRows && ewRows[0];
-            if (!ew) continue;
+            if (!ew) return;
 
             const newBalance = ew.balance - order.total_amount;
             await api(`employee_wallets?id=eq.${ew.id}`, {
@@ -2508,7 +2508,7 @@ async function loadAdminSession() {
                 created_by: state.currentUser.id,
               }
             });
-          }
+          }));
 
           await api(`order_sessions?id=eq.${sessionId}`, {
             method: 'PATCH',
