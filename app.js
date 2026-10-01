@@ -2481,6 +2481,7 @@ async function loadAdminSession() {
         confirmBtn.textContent = '結帳中，請勿重複點擊…';
 
         try {
+          const txNote = (id) => `訂單扣款（${walletName}）[${id}]`;
           const settled = await Promise.allSettled(orders.map(async (order) => {
             const emp = state.employees.find(e => e.id === order.employee_id);
             if (!emp) return;
@@ -2488,6 +2489,13 @@ async function loadAdminSession() {
             const controller = new AbortController();
             const tid = setTimeout(() => controller.abort(), 15000);
             try {
+              // 冪等性檢查：已存在就跳過，避免重複扣款
+              const existing = await api('wallet_transactions', {
+                params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, notes: `eq.${txNote(order.id)}`, select: 'id', limit: '1' },
+                signal: controller.signal,
+              });
+              if (existing && existing.length > 0) return;
+
               const ewRows = await api('employee_wallets', {
                 params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' },
                 signal: controller.signal,
@@ -2510,7 +2518,7 @@ async function loadAdminSession() {
                   amount: -order.total_amount,
                   type: 'deduct',
                   date: new Date().toISOString().slice(0, 10),
-                  notes: `訂單扣款（${walletName}）`,
+                  notes: txNote(order.id),
                   created_by: state.currentUser.id,
                 },
                 signal: controller.signal,
@@ -2520,7 +2528,7 @@ async function loadAdminSession() {
             }
           }));
           const failCount = settled.filter(r => r.status === 'rejected').length;
-          if (failCount > 0) throw new Error(`${failCount} 筆扣款失敗，請重新結帳`);
+          if (failCount > 0) throw new Error(`${failCount} 筆扣款失敗，已成功的不會重複扣，請再按一次結帳`);
 
           await api(`order_sessions?id=eq.${sessionId}`, {
             method: 'PATCH',
