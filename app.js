@@ -1783,7 +1783,7 @@ async function loadHistory() {
       return `<div class="wallet-tx">
         <div>
           <div>${tx.date}　${label}${walletName ? '　' + walletName : ''}</div>
-          ${tx.notes ? `<div class="wallet-tx-info">${tx.notes}</div>` : ''}
+          ${tx.notes ? `<div class="wallet-tx-info">${tx.notes.replace(/\s*\[[^\]]+\]$/, '')}</div>` : ''}
         </div>
         <span class="wallet-tx-amount ${isPlus ? 'plus' : 'minus'}">${isPlus ? '+' : ''}$${tx.amount}</span>
       </div>`;
@@ -2856,7 +2856,7 @@ async function loadWalletHistory(employeeId) {
     return `<div class="wallet-tx">
       <div>
         <div>${tx.date}　${label}${walletName ? '　' + walletName : ''}</div>
-        <div class="wallet-tx-info">${tx.notes || ''}${by ? '　操作人：' + by : ''}</div>
+        <div class="wallet-tx-info">${(tx.notes || '').replace(/\s*\[[^\]]+\]$/, '')}${by ? '　操作人：' + by : ''}</div>
       </div>
       <span class="wallet-tx-amount ${isPlus ? 'plus' : 'minus'}">${isPlus ? '+' : ''}$${tx.amount}</span>
     </div>`;
