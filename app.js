@@ -91,7 +91,7 @@ const state = {
 
 // ---- API helpers ----
 async function api(path, options = {}) {
-  const { method = 'GET', body, params } = options;
+  const { method = 'GET', body, params, signal } = options;
   let url = `${SUPABASE_URL}/rest/v1/${path}`;
   if (params) {
     const qs = new URLSearchParams(params).toString();
@@ -108,6 +108,7 @@ async function api(path, options = {}) {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
   if (!res.ok) {
     const err = await res.text();
@@ -2480,35 +2481,46 @@ async function loadAdminSession() {
         confirmBtn.textContent = '結帳中，請勿重複點擊…';
 
         try {
-          await Promise.all(orders.map(async (order) => {
+          const settled = await Promise.allSettled(orders.map(async (order) => {
             const emp = state.employees.find(e => e.id === order.employee_id);
             if (!emp) return;
 
-            const ewRows = await api('employee_wallets', {
-              params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' }
-            });
-            const ew = ewRows && ewRows[0];
-            if (!ew) return;
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 15000);
+            try {
+              const ewRows = await api('employee_wallets', {
+                params: { employee_id: `eq.${emp.id}`, wallet_id: `eq.${walletId}`, select: 'id,balance' },
+                signal: controller.signal,
+              });
+              const ew = ewRows && ewRows[0];
+              if (!ew) return;
 
-            const newBalance = ew.balance - order.total_amount;
-            await api(`employee_wallets?id=eq.${ew.id}`, {
-              method: 'PATCH',
-              body: { balance: newBalance },
-            });
+              const newBalance = ew.balance - order.total_amount;
+              await api(`employee_wallets?id=eq.${ew.id}`, {
+                method: 'PATCH',
+                body: { balance: newBalance },
+                signal: controller.signal,
+              });
 
-            await api('wallet_transactions', {
-              method: 'POST',
-              body: {
-                employee_id: emp.id,
-                wallet_id: walletId,
-                amount: -order.total_amount,
-                type: 'deduct',
-                date: new Date().toISOString().slice(0, 10),
-                notes: `訂單扣款（${walletName}）`,
-                created_by: state.currentUser.id,
-              }
-            });
+              await api('wallet_transactions', {
+                method: 'POST',
+                body: {
+                  employee_id: emp.id,
+                  wallet_id: walletId,
+                  amount: -order.total_amount,
+                  type: 'deduct',
+                  date: new Date().toISOString().slice(0, 10),
+                  notes: `訂單扣款（${walletName}）`,
+                  created_by: state.currentUser.id,
+                },
+                signal: controller.signal,
+              });
+            } finally {
+              clearTimeout(tid);
+            }
           }));
+          const failCount = settled.filter(r => r.status === 'rejected').length;
+          if (failCount > 0) throw new Error(`${failCount} 筆扣款失敗，請重新結帳`);
 
           await api(`order_sessions?id=eq.${sessionId}`, {
             method: 'PATCH',
