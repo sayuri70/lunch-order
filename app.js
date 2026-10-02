@@ -2459,18 +2459,15 @@ async function loadAdminSession() {
       const modal = document.getElementById('settle-wallet-modal');
       modal.style.display = 'flex';
 
-      const confirmBtn = document.getElementById('settle-wallet-confirm');
-      const cancelBtn = document.getElementById('settle-wallet-cancel');
-
-      const cleanup = () => {
+      const closeModal = () => {
         modal.style.display = 'none';
-        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
-        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        document.getElementById('settle-wallet-confirm').onclick = null;
+        document.getElementById('settle-wallet-cancel').onclick = null;
       };
 
-      document.getElementById('settle-wallet-cancel').addEventListener('click', cleanup);
+      document.getElementById('settle-wallet-cancel').onclick = closeModal;
 
-      document.getElementById('settle-wallet-confirm').addEventListener('click', async () => {
+      document.getElementById('settle-wallet-confirm').onclick = async () => {
         const walletId = document.getElementById('settle-wallet-select').value;
         const walletName = state.wallets.find(w => w.id === walletId)?.name || '未知錢包';
 
@@ -2535,17 +2532,17 @@ async function loadAdminSession() {
             body: { is_settled: true, wallet_id: walletId }
           });
 
-          cleanup();
+          closeModal();
           toast(`結帳完成！共 ${orders.length} 筆訂單，從「${walletName}」扣款`);
           loadAdminSession();
         } catch (err) {
-          const confirmBtn2 = document.getElementById('settle-wallet-confirm');
-          const cancelBtn2 = document.getElementById('settle-wallet-cancel');
-          if (confirmBtn2) { confirmBtn2.disabled = false; confirmBtn2.textContent = '確定結帳'; }
-          if (cancelBtn2) cancelBtn2.disabled = false;
+          const confirmBtn = document.getElementById('settle-wallet-confirm');
+          const cancelBtn = document.getElementById('settle-wallet-cancel');
+          if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '確定結帳'; }
+          if (cancelBtn) cancelBtn.disabled = false;
           toast('結帳失敗：' + err.message);
         }
-      });
+      };
     });
   });
 
