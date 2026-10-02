@@ -2477,6 +2477,18 @@ async function loadAdminSession() {
         cancelBtn.disabled = true;
         confirmBtn.textContent = '結帳中，請勿重複點擊…';
 
+        // 最後防線：不論原因，20 秒後強制解鎖，讓使用者可以重試
+        const masterTimer = setTimeout(() => {
+          const btn = document.getElementById('settle-wallet-confirm');
+          if (btn && btn.disabled) {
+            btn.disabled = false;
+            btn.textContent = '確定結帳';
+            const cBtn = document.getElementById('settle-wallet-cancel');
+            if (cBtn) cBtn.disabled = false;
+            toast('結帳逾時，請再試一次（已成功的不會重複扣）');
+          }
+        }, 20000);
+
         try {
           const txNote = (id) => `訂單扣款（${walletName}）[${id}]`;
           const settled = await Promise.allSettled(orders.map(async (order) => {
@@ -2532,10 +2544,12 @@ async function loadAdminSession() {
             body: { is_settled: true, wallet_id: walletId }
           });
 
+          clearTimeout(masterTimer);
           closeModal();
           toast(`結帳完成！共 ${orders.length} 筆訂單，從「${walletName}」扣款`);
           loadAdminSession();
         } catch (err) {
+          clearTimeout(masterTimer);
           const confirmBtn = document.getElementById('settle-wallet-confirm');
           const cancelBtn = document.getElementById('settle-wallet-cancel');
           if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '確定結帳'; }
