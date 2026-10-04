@@ -5,6 +5,11 @@
 const SUPABASE_URL = 'https://psyronkxtovwybqwtotv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KbfVHbfTr5VgH2t7kuVMCQ_2C8639ev';
 
+function localDateStr(date) {
+  const d = date || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 const SWEETNESS_OPTIONS = ['全糖', '七分糖', '五分糖', '三分糖', '一分糖', '無糖'];
 const ICE_OPTIONS = ['正常冰', '少冰', '微冰', '去冰', '溫飲', '熱飲'];
 
@@ -273,14 +278,15 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 function formatSessionDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const today = localDateStr();
+  const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+  const tomorrow = localDateStr(tmrw);
   const prefix = dateStr === today ? '今天' : dateStr === tomorrow ? '明天' : '';
   return `${prefix ? prefix + ' ' : ''}${dateStr.slice(5)}（${WEEKDAYS[d.getDay()]}）`;
 }
 
 async function loadAvailableSessions() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const sessions = await api('order_sessions', {
     params: {
       select: '*,employees!order_sessions_created_by_fkey(name)',
@@ -312,7 +318,7 @@ async function loadAvailableSessions() {
   const nowTime = now.getHours() * 60 + now.getMinutes();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const yesterdayStr = localDateStr(yesterday);
   for (const s of allSessions) {
     if (s.status !== 'open' || !s.deadline) continue;
     const [h, m] = s.deadline.split(':').map(Number);
@@ -2353,13 +2359,13 @@ async function loadAdminSession() {
   const dateSelect = document.getElementById('admin-session-date');
   dateSelect.innerHTML = '';
   for (let i = 0; i < 7; i++) {
-    const d = new Date(Date.now() + i * 86400000);
-    const val = d.toISOString().slice(0, 10);
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const val = localDateStr(d);
     const label = formatSessionDate(val);
     dateSelect.innerHTML += `<option value="${val}">${label}</option>`;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const upcoming = await api('order_sessions', {
     params: {
       select: '*,employees!order_sessions_created_by_fkey(name),wallets(name)',
@@ -2526,7 +2532,7 @@ async function loadAdminSession() {
                   wallet_id: walletId,
                   amount: -order.total_amount,
                   type: 'deduct',
-                  date: new Date().toISOString().slice(0, 10),
+                  date: localDateStr(),
                   notes: txNote(order.id),
                   created_by: state.currentUser.id,
                 },
@@ -2771,7 +2777,7 @@ async function loadWallet() {
     select.innerHTML = state.employees.map(e =>
       `<option value="${e.id}">${e.name}</option>`
     ).join('');
-    document.getElementById('topup-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('topup-date').value = localDateStr();
   }
 
   await renderWalletBalances();
