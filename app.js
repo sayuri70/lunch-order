@@ -1417,6 +1417,7 @@ function openEditItemModal(item, orderId) {
   document.getElementById('edit-item-title').textContent = title;
   document.getElementById('edit-item-qty').value = item.quantity || 1;
   document.getElementById('edit-item-notes').value = item.notes || '';
+  document.getElementById('edit-item-price-adjust').value = 0;
   const isDrink = item.item_type === 'drink';
   const drinkOpts = document.getElementById('edit-item-drink-options');
   drinkOpts.style.display = isDrink ? '' : 'none';
@@ -1440,10 +1441,11 @@ function openEditItemModal(item, orderId) {
   document.getElementById('edit-item-save').addEventListener('click', async () => {
     const qty = parseInt(document.getElementById('edit-item-qty').value) || 1;
     const notes = document.getElementById('edit-item-notes').value.trim() || null;
+    const priceAdjust = parseInt(document.getElementById('edit-item-price-adjust').value) || 0;
     const body = {
       quantity: qty,
       notes,
-      total_price: (item.base_price + (item.toppings_price || 0)) * qty,
+      total_price: (item.base_price + (item.toppings_price || 0)) * qty + priceAdjust,
     };
     if (isDrink) {
       body.sweetness = document.getElementById('edit-item-sweetness').value;
