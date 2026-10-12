@@ -109,7 +109,8 @@
             </div>
           </div>
           <div id="photo-container" class="photo-container">
-            <img id="menu-photo-img" src="" alt="菜單照片" class="menu-photo-full">
+            <img id="menu-photo-img" src="" alt="菜單照片" class="menu-photo-full" onerror="this.style.display='none';document.getElementById('menu-photo-error').style.display='block'" onload="this.style.display='';document.getElementById('menu-photo-error').style.display='none'">
+            <p id="menu-photo-error" style="display:none;text-align:center;color:var(--text-secondary);padding:40px">圖片載入失敗，請確認菜單照片網址是 Google Drive 的檔案連結（非資料夾連結）</p>
           </div>
         </div>
       </div>

@@ -19,6 +19,7 @@ const MEAL_CATEGORIES = [
   { label: '麵食', names: ['溢煌排骨酥麵','楠涵風味餐','新北市老黃牛雜','央二巷','西螺鴨膳師','花山家','兩支北方麵食館','上和魚刺肉羹','三舅媽的店','三九餃子館'] },
   { label: '火鍋', names: ['巧媽臭臭鍋'] },
   { label: '小吃', names: ['謝家油飯','寶島麵線-甜不辣','玖零后碳烤吐司','台灣第一米粉湯','老爹牛排','八方雲集'] },
+  { label: '速食', names: ['肯德基','麥當勞','摩斯漢堡','漢堡王','必勝客','Subway','達美樂'] },
 ];
 function getMealCategoryLabel(name) {
   const clean = name.replace(/^\(V\)/, '');
@@ -1769,27 +1770,32 @@ async function loadHistory() {
     `;
   }
 
-  // Wallet transaction history
-  const txs = await api('wallet_transactions', {
+  // Wallet transaction history (filtered by selected month)
+  const allTxs = await api('wallet_transactions', {
     params: {
       select: '*,wallets(name)',
       employee_id: `eq.${state.currentUser.id}`,
-      order: 'created_at.desc',
-      limit: '30',
+      date: `gte.${startDate}`,
+      order: 'date.desc,created_at.desc',
     }
   }) || [];
+  const txs = allTxs.filter(tx => tx.date < endDate);
   const txEl = document.getElementById('history-wallet-txs');
   if (txs.length === 0) {
-    txEl.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:12px">尚無交易紀錄</p>';
+    txEl.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:12px">本月尚無交易紀錄</p>';
   } else {
     txEl.innerHTML = txs.map(tx => {
       const isPlus = tx.amount > 0;
-      const label = tx.type === 'topup' ? '儲值' : tx.type === 'adjustment' ? '調整' : '扣款';
+      let label;
+      if (tx.type === 'topup') label = '儲值';
+      else if (tx.type === 'deduct') label = '午餐扣款';
+      else label = isPlus ? '調整（補款）' : '支出調整';
       const walletName = tx.wallets ? tx.wallets.name : '';
+      const displayNotes = tx.notes ? tx.notes.replace(/\s*\[[^\]]+\]$/, '') : '';
       return `<div class="wallet-tx">
         <div>
           <div>${tx.date}　${label}${walletName ? '　' + walletName : ''}</div>
-          ${tx.notes ? `<div class="wallet-tx-info">${tx.notes.replace(/\s*\[[^\]]+\]$/, '')}</div>` : ''}
+          ${displayNotes ? `<div class="wallet-tx-info">${displayNotes}</div>` : ''}
         </div>
         <span class="wallet-tx-amount ${isPlus ? 'plus' : 'minus'}">${isPlus ? '+' : ''}$${tx.amount}</span>
       </div>`;
