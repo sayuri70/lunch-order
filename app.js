@@ -443,23 +443,24 @@ async function selectSession(session) {
   document.getElementById('back-to-sessions').style.display =
     (state.allSessions && state.allSessions.length > 1) ? '' : 'none';
 
-  // Click restaurant name to view menu photo
+  // Click restaurant name to view menu (photo modal or external link)
   const mealNameEl = document.getElementById('session-meal-name');
   const drinkNameEl = document.getElementById('session-drink-name');
-  if (mealRest && mealRest.menu_image_url) {
-    mealNameEl.classList.add('has-photo');
-    mealNameEl.onclick = () => showMenuPhoto(mealRest.name, mealRest.menu_image_url);
-  } else {
-    mealNameEl.classList.remove('has-photo');
-    mealNameEl.onclick = null;
+  function bindMenuLink(el, rest) {
+    if (rest && rest.menu_image_url) {
+      el.classList.add('has-photo');
+      if (rest.menu_image_url.includes('drive.google.com')) {
+        el.onclick = () => showMenuPhoto(rest.name, rest.menu_image_url);
+      } else {
+        el.onclick = () => window.open(rest.menu_image_url, '_blank');
+      }
+    } else {
+      el.classList.remove('has-photo');
+      el.onclick = null;
+    }
   }
-  if (drinkRest && drinkRest.menu_image_url) {
-    drinkNameEl.classList.add('has-photo');
-    drinkNameEl.onclick = () => showMenuPhoto(drinkRest.name, drinkRest.menu_image_url);
-  } else {
-    drinkNameEl.classList.remove('has-photo');
-    drinkNameEl.onclick = null;
-  }
+  bindMenuLink(mealNameEl, mealRest);
+  bindMenuLink(drinkNameEl, drinkRest);
 
   // Load menu items
   if (mealRest) {
