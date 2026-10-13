@@ -19,7 +19,6 @@ const MEAL_CATEGORIES = [
   { label: '麵食', names: ['溢煌排骨酥麵','楠涵風味餐','新北市老黃牛雜','央二巷','西螺鴨膳師','花山家','兩支北方麵食館','上和魚刺肉羹','三舅媽的店','三九餃子館'] },
   { label: '火鍋', names: ['巧媽臭臭鍋'] },
   { label: '小吃', names: ['謝家油飯','寶島麵線-甜不辣','玖零后碳烤吐司','台灣第一米粉湯','老爹牛排','八方雲集'] },
-  { label: '速食', names: ['肯德基','麥當勞','摩斯漢堡','漢堡王','必勝客','Subway','達美樂'] },
 ];
 function getMealCategoryLabel(name) {
   const clean = name.replace(/^\(V\)/, '');
